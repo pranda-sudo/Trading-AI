@@ -70,7 +70,19 @@ def poll():
             tick = mt5.symbol_info_tick(broker_symbol)
             if tick is not None and tick.bid > 0 and tick.ask > 0 and tick.time > 0:
                 quotes.append({"symbol": name, "bid": float(tick.bid),
-                               "ask": float(tick.ask), "quote_time": stamp(tick.time)})
+                               "ask": float(tick.ask), "quote_time": stamp(tick.time),
+                               "broker_symbol": broker_symbol,
+                               "point_size": float(info.point),
+                               "contract_size": float(info.trade_contract_size),
+                               "volume_min": float(info.volume_min),
+                               "volume_step": float(info.volume_step),
+                               "tick_size": float(info.trade_tick_size),
+                               "tick_value": float(info.trade_tick_value),
+                               "swap_long": float(info.swap_long),
+                               "swap_short": float(info.swap_short),
+                               "swap_mode": int(info.swap_mode),
+                               "currency_profit": str(info.currency_profit),
+                               "account_currency": str(account.currency)})
             for frame_name, frame in FRAMES.items():
                 # Last 3 bars: exclude the currently forming candle at position 0.
                 bars = mt5.copy_rates_from_pos(broker_symbol, frame, 0, 3)
