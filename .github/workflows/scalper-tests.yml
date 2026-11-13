@@ -1,0 +1,31 @@
+name: Scalper V1 tests
+on:
+  push:
+    paths:
+      - 'engine/**'
+      - 'tests/**'
+      - '.github/workflows/scalper-tests.yml'
+  pull_request:
+  workflow_dispatch:
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Run synthetic backtest smoke test
+        run: |
+          python -m tests.make_fixture
+          python -m engine.run /tmp/scalper_fixture.csv --output /tmp/scalper_results.json --stop-distance 0.3 --spread 0.02
+          python -c "import json; r=json.load(open('/tmp/scalper_results.json')); assert 'summary' in r and 'trades' in r"
+      - name: Upload backtest results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scalper-synthetic-backtest
+          path: /tmp/scalper_results.json
+          if-no-files-found: ignore
