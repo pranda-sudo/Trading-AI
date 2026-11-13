@@ -92,6 +92,9 @@ def load_rows(path, symbol, frame, since):
 
 def main():
     state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    reupload_m1 = "--reupload-m1" in sys.argv
+    if reupload_m1:
+        print("Re-uploading all M1 CSV rows; existing records will be updated safely.", flush=True)
     total = 0
     for symbol in SYMBOLS:
         for frame in FRAMES:
@@ -102,11 +105,11 @@ def main():
             key = f"{symbol}_{frame}"
             batch = []
             try:
-                for row in load_rows(path, symbol, frame, state.get(key)):
+                for row in load_rows(path, symbol, frame, None if (reupload_m1 and frame == "M1") else state.get(key)):
                     batch.append(row)
                     if len(batch) >= BATCH:
                         api_upsert(batch)
-                        state[key] = batch[-1]["candle_time"]
+                        state[key] = max(state.get(key, ""), batch[-1]["candle_time"])
                         STATE.parent.mkdir(parents=True, exist_ok=True)
                         STATE.write_text(json.dumps(state, indent=2))
                         total += len(batch)
@@ -117,7 +120,7 @@ def main():
                     STATE.parent.mkdir(parents=True, exist_ok=True)
                     STATE.write_text(json.dumps(state, indent=2))
                     total += len(batch)
-                print("OK", key)
+                print("OK", key, flush=True)
             except Exception as exc:
                 print("ERROR", key, str(exc), file=sys.stderr)
                 raise
