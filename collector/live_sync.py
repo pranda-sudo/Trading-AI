@@ -18,7 +18,7 @@ EXPECTED_LOGIN = os.getenv("TRADING_AI_MT5_LOGIN", "").strip()
 TERMINAL = os.getenv("TRADING_AI_MT5_PATH", "").strip()
 SYMBOLS = {"XAUUSD": "XAUUSD", "US30": ".US30Cash", "DE40": ".DE40Cash",
            "USTECH": ".USTECHCash", "US500": ".US500Cash"}
-FRAMES = {"M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15,
+FRAMES = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15,
           "H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4, "D1": mt5.TIMEFRAME_D1}
 
 def stamp(epoch):
