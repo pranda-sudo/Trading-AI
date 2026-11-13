@@ -36,11 +36,16 @@ def api_upsert(rows):
     body = json.dumps(rows, separators=(",", ":"), allow_nan=False).encode("utf-8")
     endpoint = URL + "/rest/v1/market_candles?on_conflict=symbol,timeframe,candle_time"
     for attempt in range(MAX_RETRIES):
-        req = Request(endpoint, data=body, method="POST", headers={
-            "apikey": KEY, "Authorization": "Bearer " + KEY,
+        headers = {
+            "apikey": KEY,
             "Content-Type": "application/json",
             "Prefer": "resolution=merge-duplicates,return=minimal",
-        })
+        }
+        # New sb_secret_ API keys are opaque keys, not JWT bearer tokens.
+        # Legacy service_role JWTs can be sent as Authorization: Bearer.
+        if not KEY.startswith("sb_secret_"):
+            headers["Authorization"] = "Bearer " + KEY
+        req = Request(endpoint, data=body, method="POST", headers=headers)
         try:
             with urlopen(req, timeout=90) as response:
                 if response.status not in (200, 201, 204):
