@@ -53,9 +53,7 @@ def load_rows(path, symbol, frame, since):
         reader = csv.DictReader(f, delimiter=delimiter)
         for original in reader:
             r = {k.strip().lower().strip("<>"): v for k, v in original.items() if k}
-            t = r.get("time") or r.get("datetime")
-            if not t and r.get("date"):
-                t = r["date"] + " " + r.get("time", "00:00:00")
+            t = r.get("datetime") or (r["date"] + " " + r.get("time", "00:00:00") if r.get("date") else r.get("time"))
             if not t:
                 raise ValueError(f"Missing time column in {path.name}; headers: {list(r)}")
             ts = iso_time(t)
