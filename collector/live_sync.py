@@ -50,7 +50,8 @@ def upsert(table, rows, conflict):
         time.sleep(2 ** attempt)
 
 def poll():
-    if not mt5.initialize(path=TERMINAL, timeout=10000) if TERMINAL else not mt5.initialize(timeout=10000):
+    connected = mt5.initialize(path=TERMINAL, timeout=10000) if TERMINAL else mt5.initialize(timeout=10000)
+    if not connected:
         raise RuntimeError("MT5 initialization failed: " + str(mt5.last_error()))
     try:
         account = mt5.account_info()
