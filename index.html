@@ -13,9 +13,9 @@ import {createClient} from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2
 import {scan} from "./trend-scanner.js";
 const db=createClient("https://hatzdirgwutbdarpgwro.supabase.co","sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
 const symbols=['XAUUSD','US30','DE40','USTECH','US500'],periods=['M1','M5','M15','H1','H4','D1'];
-let symbol='XAUUSD',period='H1',candles=[],requestId=0;const chartHeight=340,axisHeight=42;let mt5OffsetHours=Number(localStorage.getItem('mt5ServerUtcOffset')??'0');const mt5Date=value=>new Date(new Date(value).getTime()+mt5OffsetHours*3600000);const mt5Parts=value=>{const d=mt5Date(value);return {year:String(d.getUTCFullYear()),month:String(d.getUTCMonth()+1).padStart(2,'0'),day:String(d.getUTCDate()).padStart(2,'0'),hour:String(d.getUTCHours()).padStart(2,'0'),minute:String(d.getUTCMinutes()).padStart(2,'0')}};const dateLabel=(value,withTime=true)=>{const p=mt5Parts(value);return p.day+'. '+p.month+'. '+p.year+(withTime?' '+p.hour+':'+p.minute:'')};
+let symbol='XAUUSD',period='H1',candles=[],requestId=0,latestQuote=null;const chartHeight=340,axisHeight=42;let mt5OffsetHours=Number(localStorage.getItem('mt5ServerUtcOffset')??'0');const mt5Date=value=>new Date(new Date(value).getTime()+mt5OffsetHours*3600000);const mt5Parts=value=>{const d=mt5Date(value);return {year:String(d.getUTCFullYear()),month:String(d.getUTCMonth()+1).padStart(2,'0'),day:String(d.getUTCDate()).padStart(2,'0'),hour:String(d.getUTCHours()).padStart(2,'0'),minute:String(d.getUTCMinutes()).padStart(2,'0')}};const dateLabel=(value,withTime=true)=>{const p=mt5Parts(value);return p.day+'. '+p.month+'. '+p.year+(withTime?' '+p.hour+':'+p.minute:'')};
 const $=id=>document.getElementById(id);
-async function loadQuote(){try{const {data:auth,error:authError}=await db.auth.getUser();if(authError||!auth?.user)return;const requested=symbol;const {data,error}=await db.from('market_quotes').select('bid,ask,quote_time,received_at,point_size,contract_size,volume_min,tick_size,tick_value,swap_long,swap_short,swap_mode,account_currency,currency_profit').eq('symbol',requested).maybeSingle();if(requested!==symbol)return;if(error)throw error;if(!data){$('quote-status').textContent='Čekám na první kotaci z VPS';return}const age=Math.max(0,(Date.now()-new Date(data.quote_time).getTime())/1000);const fresh=age<=45;const fmt=x=>Number(x).toLocaleString('cs-CZ',{maximumFractionDigits:5});$('quote-bid').textContent=fmt(data.bid);$('quote-ask').textContent=fmt(data.ask);$('quote-spread').textContent=fmt(Number(data.ask)-Number(data.bid));$('quote-status').textContent=fresh?'● Aktuální tick MT5':'● Neaktuální kotace ('+Math.round(age)+' s)';$('quote-status').style.color=fresh?'#47d7a5':'#ff8291';$('quote-costs').textContent=data.point_size?('Spread: '+fmt((Number(data.ask)-Number(data.bid))/Number(data.point_size))+' bodů · orientační spread pro 1 lot: '+(data.tick_size>0&&data.tick_value>0?fmt((Number(data.ask)-Number(data.bid))/Number(data.tick_size)*Number(data.tick_value))+' '+(data.account_currency||'měna účtu'):'nelze vypočítat')+' · Swap long/short: '+(data.swap_long??'—')+' / '+(data.swap_short??'—')+' (režim '+(data.swap_mode??'—')+') · Komise: ověřit dle typu účtu MT5'):'Údaje o nákladech čekají na aktualizaci synchronizace VPS';$('quote-time').textContent='Poslední tick: '+dateLabel(data.quote_time)+' (Praha) · stáří '+Math.round(age)+' s · poslední synchronizace: '+dateLabel(data.received_at)+' (čas grafu)';}catch(e){$('quote-status').textContent='Chyba kotací: '+e.message}}
+async function loadQuote(){try{const {data:auth,error:authError}=await db.auth.getUser();if(authError||!auth?.user)return;const requested=symbol;const {data,error}=await db.from('market_quotes').select('bid,ask,quote_time,received_at,point_size,contract_size,volume_min,tick_size,tick_value,swap_long,swap_short,swap_mode,account_currency,currency_profit').eq('symbol',requested).maybeSingle();if(requested!==symbol)return;if(error)throw error;if(!data){latestQuote=null;$('quote-status').textContent='Čekám na první kotaci z VPS';draw();return}const age=Math.max(0,(Date.now()-new Date(data.quote_time).getTime())/1000);const fresh=age<=45;latestQuote={symbol:requested,bid:Number(data.bid),ask:Number(data.ask),fresh,quoteTime:data.quote_time};draw();const fmt=x=>Number(x).toLocaleString('cs-CZ',{maximumFractionDigits:5});$('quote-bid').textContent=fmt(data.bid);$('quote-ask').textContent=fmt(data.ask);$('quote-spread').textContent=fmt(Number(data.ask)-Number(data.bid));$('quote-status').textContent=fresh?'● Aktuální tick MT5':'● Neaktuální kotace ('+Math.round(age)+' s)';$('quote-status').style.color=fresh?'#47d7a5':'#ff8291';$('quote-costs').textContent=data.point_size?('Spread: '+fmt((Number(data.ask)-Number(data.bid))/Number(data.point_size))+' bodů · orientační spread pro 1 lot: '+(data.tick_size>0&&data.tick_value>0?fmt((Number(data.ask)-Number(data.bid))/Number(data.tick_size)*Number(data.tick_value))+' '+(data.account_currency||'měna účtu'):'nelze vypočítat')+' · Swap long/short: '+(data.swap_long??'—')+' / '+(data.swap_short??'—')+' (režim '+(data.swap_mode??'—')+') · Komise: ověřit dle typu účtu MT5'):'Údaje o nákladech čekají na aktualizaci synchronizace VPS';$('quote-time').textContent='Poslední tick: '+dateLabel(data.quote_time)+' (Praha) · stáří '+Math.round(age)+' s · poslední synchronizace: '+dateLabel(data.received_at)+' (čas grafu)';}catch(e){$('quote-status').textContent='Chyba kotací: '+e.message}}
 setInterval(()=>{if(document.visibilityState==='visible'){loadQuote();load()}},15000);
 function sma(a,n){return a.length<n?null:a.slice(-n).reduce((x,y)=>x+y,0)/n}
 function rsi(a,n=14){if(a.length<=n)return null;let gains=0,losses=0;for(let i=a.length-n;i<a.length;i++){const d=a[i]-a[i-1];gains+=Math.max(0,d);losses+=Math.max(0,-d)}return losses===0?(gains===0?50:100):100-100/(1+gains/losses)}
@@ -40,7 +40,7 @@ function draw(){
  let previousDay='',previousSlot='';
  for(let i=0;i<a.length;i++){
    const t=new Date(a[i].candle_time),p=localParts(t),day=p.year+'-'+p.month+'-'+p.day,xx=plotLeft+(i+.5)*step;
-   if(day!==previousDay){
+   if(day!==previousDay && (period!=='D1' || i===0)){
      ctx.save();ctx.setLineDash([3,5]);ctx.strokeStyle='#53637a';ctx.beginPath();ctx.moveTo(xx,plotTop);ctx.lineTo(xx,plotBottom);ctx.stroke();ctx.restore();
      previousDay=day;
    }
@@ -72,11 +72,12 @@ function draw(){
    const values=emaSeries(length);ctx.strokeStyle=color;ctx.lineWidth=1.7;ctx.beginPath();
    values.forEach((value,i)=>{const xx=plotLeft+(i+.5)*step,yy=y(value);if(i===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy)});ctx.stroke();
  }
- // Latest stored candle close on the right-hand price scale (not a live bid/ask).
- const lastClose=Number(a[a.length-1].close),lastY=y(lastClose);
- ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#65a8ff';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(plotLeft,lastY);ctx.lineTo(plotRight,lastY);ctx.stroke();ctx.restore();
- ctx.fillStyle='#2563a7';ctx.fillRect(plotRight+2,lastY-11,priceAxisWidth-5,22);
- ctx.fillStyle='#ffffff';ctx.font='bold 12px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText(lastClose.toFixed(2),plotRight+priceAxisWidth/2,lastY+4);ctx.textAlign='start';
+ // One broker Bid quote shared by every timeframe; never label a historical close as current.
+ const lastClose=Number(a[a.length-1].close),quote=latestQuote?.symbol===symbol&&latestQuote.fresh?latestQuote:null;
+ const displayPrice=quote?quote.bid:lastClose,lastY=y(displayPrice);
+ ctx.save();ctx.setLineDash([4,4]);if(lastY>=plotTop&&lastY<=plotBottom){ctx.strokeStyle=quote?'#65a8ff':'#b2a0a0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(plotLeft,lastY);ctx.lineTo(plotRight,lastY);ctx.stroke();ctx.restore();
+ ctx.fillStyle=quote?'#2563a7':'#5d6474';ctx.fillRect(plotRight+2,lastY-11,priceAxisWidth-5,22);
+ ctx.fillStyle='#ffffff';ctx.font='bold 12px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText(displayPrice.toFixed(2),plotRight+priceAxisWidth/2,lastY+4);ctx.textAlign='start';}else{ctx.restore();}
  const closes=a.map(x=>Number(x.close)),v=rsi(closes),s20=sma(closes,20),s50=sma(closes,50);
  $('sma20').textContent=s20===null?'—':s20.toFixed(2);$('sma50').textContent=s50===null?'—':s50.toFixed(2);$('rsi').textContent=v===null?'—':v.toFixed(1);
  $('interpretation').textContent=s20===null||s50===null||v===null?'Pro indikátory není dostatek svíček.':'SMA20 '+(s20>s50?'je nad':s20<s50?'je pod':'je na úrovni')+' SMA50. RSI '+(v>70?'je v překoupené oblasti.':v<30?'je v přeprodané oblasti.':'je mimo krajní pásma.')+' Výpočet vychází z uložených OHLC cen RoboForex MT5.';
@@ -92,7 +93,7 @@ async function load(){
   candles=(data||[]).reverse();
   if(!candles.length){$('data-status').textContent='Pro '+symbol+' '+period+' nejsou dostupná data.';return}
   const last=candles[candles.length-1];
-  $('data-status').textContent='Zdroj: RoboForex MT5 · '+candles.length+' svíček · poslední: '+dateLabel(last.candle_time)+' (čas grafu, UTC'+(mt5OffsetHours>=0?'+':'')+mt5OffsetHours+'). Jde o poslední uloženou svíčku, nikoli živý tick.';
+  $('data-status').textContent='Zdroj: RoboForex MT5 · '+candles.length+' historických svíček · poslední svíčka: '+dateLabel(last.candle_time)+' · její uzavření: '+Number(last.close).toFixed(2)+'. Aktuální cena je samostatná kotace Bid/Ask výše a je společná pro všechny timeframe.';
   draw();
  }catch(e){if(id===requestId)$('data-status').textContent='Data se nepodařilo načíst: '+e.message}
 }
@@ -101,7 +102,7 @@ function render(){
  $('periods').innerHTML=periods.map(p=>'<button data-period="'+p+'" class="'+(p===period?'active':'')+'">'+p+'</button>').join('');
  $('heading').textContent=symbol;load();loadQuote();
 }
-$('symbols').addEventListener('click',e=>{if(e.target.dataset.symbol&&symbol!==e.target.dataset.symbol){symbol=e.target.dataset.symbol;render()}});
+$('symbols').addEventListener('click',e=>{if(e.target.dataset.symbol&&symbol!==e.target.dataset.symbol){symbol=e.target.dataset.symbol;latestQuote=null;render()}});
 $('periods').addEventListener('click',e=>{if(e.target.dataset.period&&period!==e.target.dataset.period){period=e.target.dataset.period;render()}});
 $('chart').addEventListener('mousemove',e=>{if(!candles.length)return;const rect=e.currentTarget.getBoundingClientRect(),i=Math.max(0,Math.min(candles.length-1,Math.floor(Math.max(0,e.clientX-rect.left-4)/Math.max(1,rect.width-78-4)*candles.length))),x=candles[i];$('candle-tooltip').textContent=dateLabel(x.candle_time)+' (MT5)  ·  O '+Number(x.open).toFixed(2)+'  H '+Number(x.high).toFixed(2)+'  L '+Number(x.low).toFixed(2)+'  C '+Number(x.close).toFixed(2)});
 $('chart').addEventListener('mouseleave',()=>{$('candle-tooltip').textContent='Najeď myší na svíčku pro datum, čas a ceny OHLC.'});
