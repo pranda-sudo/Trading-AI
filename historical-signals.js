@@ -33,6 +33,10 @@ export function paintSignals(ctx,rows,signals,{x,y,plotRight,plotTop,plotBottom,
   const xx=x(s.index),yy=y(s.entry),isLong=s.side==='LONG',color=isLong?'#5de0b4':'#ff8895';
   const direction=isLong?-1:1,apex=yy+direction*10;
   ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(xx,apex);ctx.lineTo(xx-6,apex+direction* -11);ctx.lineTo(xx+6,apex+direction* -11);ctx.closePath();ctx.fill();
+  // Historical outcome is explicitly labeled; a LONG marker is not a promise of price growth.
+  const outcome=s.result==='TP'?'✓ TP':s.result==='SL'?'✕ SL':'?';
+  ctx.fillStyle=s.result==='TP'?'#65dcb2':s.result==='SL'?'#ff8895':'#b8c5d9';
+  ctx.textAlign='center';ctx.fillText(outcome,xx,Math.max(plotTop+12,Math.min(plotBottom-6,yy+(isLong?26:-18))));
   const right=Math.min(plotRight,xx+Math.max(30,Math.min(75,step*22)));
   for(const [price,label,lineColor] of [[s.entry,'VSTUP','#8bb9ff'],[s.stop,'SL','#ff7d8a'],[s.target,'TP','#65dcb2']]){
    const py=y(price);if(py<plotTop||py>plotBottom)continue;
