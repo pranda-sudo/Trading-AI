@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 
 BASE = Path(os.getenv("MT5_HISTORY_DIR", r"C:\AItrading\collector\history"))
 SYMBOLS = ("XAUUSD", "US30", "DE40", "USTECH", "US500")
-FRAMES = ("M5", "M15", "H1", "H4", "D1")
+FRAMES = ("M1", "M5", "M15", "H1", "H4", "D1")
 URL = os.environ["SUPABASE_URL"].rstrip("/")
 KEY = os.environ["SUPABASE_SECRET_KEY"]
 STATE = Path(os.getenv("UPLOAD_STATE_FILE", r"C:\AItrading\collector\upload_state.json"))
