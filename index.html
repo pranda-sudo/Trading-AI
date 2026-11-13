@@ -26,12 +26,31 @@ function draw(){
  if(!candles.length)return;
  drawScanner();
  const a=candles,lo=Math.min(...a.map(x=>Number(x.low))),hi=Math.max(...a.map(x=>Number(x.high))),pad=(hi-lo)*.08||1,min=lo-pad,max=hi+pad;
- const plotBottom=h-axisHeight,plotTop=20;const y=v=>plotBottom-10-(Number(v)-min)/(max-min)*(plotBottom-plotTop-20),step=w/a.length,bw=Math.max(2,Math.min(11,step*.62));
+ const plotBottom=h-(period==='M5'?Math.max(axisHeight,78):axisHeight),plotTop=20;const y=v=>plotBottom-10-(Number(v)-min)/(max-min)*(plotBottom-plotTop-20),step=w/a.length,bw=Math.max(2,Math.min(11,step*.62));
  ctx.strokeStyle='#2d3c53';ctx.lineWidth=1;
  for(let i=0;i<5;i++){const yy=plotTop+i*(plotBottom-plotTop-10)/4;ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(w,yy);ctx.stroke();ctx.fillStyle='#96a7bf';ctx.font='11px sans-serif';ctx.fillText((max-i*(max-min)/4).toFixed(2),6,yy-4)}
  ctx.strokeStyle='#40536e';ctx.beginPath();ctx.moveTo(0,plotBottom);ctx.lineTo(w,plotBottom);ctx.stroke();
+ if(period==='M5'){
+   // Mark each Prague-local half hour; rotate labels to avoid collisions.
+   ctx.font='10px system-ui,sans-serif';ctx.textAlign='left';
+   let previousDay='';
+   for(let i=0;i<a.length;i++){
+     const t=new Date(a[i].candle_time);
+     const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(t);
+     const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+     const minute=Number(p.minute);
+     if(minute!==0&&minute!==30)continue;
+     const xx=(i+.5)*step,day=p.day+'. '+p.month+'.';
+     ctx.strokeStyle='#3a4c65';ctx.beginPath();ctx.moveTo(xx,plotBottom);ctx.lineTo(xx,plotBottom+5);ctx.stroke();
+     ctx.save();ctx.translate(xx-1,plotBottom+9);ctx.rotate(Math.PI/3);
+     ctx.fillStyle='#aebed3';ctx.fillText(p.hour+':'+p.minute,0,0);ctx.restore();
+     if(day!==previousDay){ctx.fillStyle='#74aef2';ctx.textAlign='center';ctx.fillText(day,xx,plotBottom+62);ctx.textAlign='left';previousDay=day}
+   }
+   ctx.textAlign='start';
+ }else{
  const maxLabels=Math.max(2,Math.floor(w/112)),every=Math.max(1,Math.ceil(a.length/maxLabels));ctx.fillStyle='#aebed3';ctx.font='11px system-ui,sans-serif';ctx.textAlign='center';
  for(let i=0;i<a.length;i+=every){const xx=(i+.5)*step,t=new Date(a[i].candle_time);const date=t.toLocaleDateString('cs-CZ',{timeZone:'Europe/Prague',day:'2-digit',month:'2-digit'});const time=t.toLocaleTimeString('cs-CZ',{timeZone:'Europe/Prague',hour:'2-digit',minute:'2-digit'});ctx.strokeStyle='#51647f';ctx.beginPath();ctx.moveTo(xx,plotBottom);ctx.lineTo(xx,plotBottom+5);ctx.stroke();ctx.fillText(date,xx,plotBottom+17);if(period!=='D1')ctx.fillText(time,xx,plotBottom+31)}ctx.textAlign='start';
+ }
  a.forEach((x,i)=>{const xx=(i+.5)*step,up=Number(x.close)>=Number(x.open);ctx.strokeStyle=ctx.fillStyle=up?'#47d7a5':'#ff8291';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(xx,y(x.high));ctx.lineTo(xx,y(x.low));ctx.stroke();const top=y(Math.max(x.open,x.close)),bottom=y(Math.min(x.open,x.close));ctx.fillRect(xx-bw/2,top,bw,Math.max(1,bottom-top))});
  const closes=a.map(x=>Number(x.close)),v=rsi(closes),s20=sma(closes,20),s50=sma(closes,50);
  $('sma20').textContent=s20===null?'—':s20.toFixed(2);$('sma50').textContent=s50===null?'—':s50.toFixed(2);$('rsi').textContent=v===null?'—':v.toFixed(1);
