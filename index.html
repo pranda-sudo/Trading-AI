@@ -13,7 +13,10 @@
 <script type="module">
 import {createClient} from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm";
 import {scan} from "./trend-scanner.js";
+import {historicalSignals,paintSignals} from "./historical-signals.js";
 const db=createClient("https://hatzdirgwutbdarpgwro.supabase.co","sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
+const signalPanel=document.createElement('div');signalPanel.className='card';signalPanel.id='historical-signal-panel';signalPanel.innerHTML='<h2>Historické vstupy a obchodní úrovně</h2><label style="display:flex;gap:9px;align-items:center;margin-bottom:12px"><input id="signal-toggle" type="checkbox" checked style="width:auto"> Zobrazit šipky LONG / SHORT, vstup, TP a SL v grafu</label><div id="signal-summary" class="note">Čekám na svíčková data…</div><div id="signal-rows" style="overflow-x:auto"></div><p class="note">Signály vznikají až po uzavření potvrzovací svíčky, vstup je modelován na otevření následující svíčky. TP = 2× riziko, SL podle lokálního extrému a ATR. Výsledky jsou orientační, bez spreadu, skluzu a poplatků. Nejde o ověřený backtest ani o automatické pokyny.</p>';document.querySelector('#chart')?.closest('.card')?.insertAdjacentElement('afterend',signalPanel);let showSignals=true;signalPanel.querySelector('#signal-toggle').addEventListener('change',e=>{showSignals=e.target.checked;draw()});
+function renderSignals(){const list=historicalSignals(candles);const countTP=list.filter(s=>s.result==='TP').length,countSL=list.filter(s=>s.result==='SL').length;document.querySelector('#signal-summary').textContent=candles.length<65?'Nedostatek dat pro historické signály.':list.length?'Posledních '+list.length+' nalezených signálů · TP '+countTP+' · SL '+countSL+' · ostatní bez uzavření ve sledovaném horizontu.':'V zobrazeném úseku nejsou potvrzené vstupy.';document.querySelector('#signal-rows').innerHTML=list.length?'<table class="decision-table"><thead><tr><th>Čas MT5</th><th>Směr</th><th>Vstup</th><th>SL</th><th>TP</th><th>Výsledek</th></tr></thead><tbody>'+list.map(v=>'<tr><td>'+dateLabel(v.time)+'</td><td style="color:'+(v.side==='LONG'?'#5de0b4':'#ff8895')+'">'+(v.side==='LONG'?'▲ LONG':'▼ SHORT')+'</td><td>'+v.entry.toFixed(2)+'</td><td>'+v.stop.toFixed(2)+'</td><td>'+v.target.toFixed(2)+'</td><td>'+v.result+'</td></tr>').join('')+'</tbody></table>':'';return list}
 const symbols=['XAUUSD','US30','DE40','USTECH','US500'],periods=['M1','M5','M15','H1','H4','D1'];
 let symbol='XAUUSD',period='H1',candles=[],requestId=0,latestQuote=null,decisionRequestId=0;const chartHeight=340,axisHeight=42;let mt5OffsetHours=Number(localStorage.getItem('mt5ServerUtcOffset')??'0');const mt5Date=value=>new Date(new Date(value).getTime()+mt5OffsetHours*3600000);const mt5Parts=value=>{const d=mt5Date(value);return {year:String(d.getUTCFullYear()),month:String(d.getUTCMonth()+1).padStart(2,'0'),day:String(d.getUTCDate()).padStart(2,'0'),hour:String(d.getUTCHours()).padStart(2,'0'),minute:String(d.getUTCMinutes()).padStart(2,'0')}};const dateLabel=(value,withTime=true)=>{const p=mt5Parts(value);return p.day+'. '+p.month+'. '+p.year+(withTime?' '+p.hour+':'+p.minute:'')};
 const $=id=>document.getElementById(id);
@@ -105,6 +108,7 @@ function draw(){
    const values=emaSeries(length);ctx.strokeStyle=color;ctx.lineWidth=1.7;ctx.beginPath();
    values.forEach((value,i)=>{const xx=plotLeft+(i+.5)*step,yy=y(value);if(i===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy)});ctx.stroke();
  }
+ if(showSignals){const sig=historicalSignals(a);paintSignals(ctx,a,sig,{x:i=>plotLeft+(i+.5)*step,y,plotRight,plotTop,plotBottom,step});}
  // One broker Bid quote shared by every timeframe; never label a historical close as current.
  const lastClose=Number(a[a.length-1].close),quote=latestQuote?.symbol===symbol&&latestQuote.fresh?latestQuote:null;
  const displayPrice=quote?quote.bid:lastClose,lastY=y(displayPrice);
@@ -116,7 +120,7 @@ function draw(){
  $('interpretation').textContent=s20===null||s50===null||v===null?'Pro indikátory není dostatek svíček.':'SMA20 '+(s20>s50?'je nad':s20<s50?'je pod':'je na úrovni')+' SMA50. RSI '+(v>70?'je v překoupené oblasti.':v<30?'je v přeprodané oblasti.':'je mimo krajní pásma.')+' Výpočet vychází z uložených OHLC cen RoboForex MT5.';
 }
 async function load(){
- const id=++requestId; candles=[];draw();$('scanner-content').textContent='Načítám analýzu…';$('sma20').textContent=$('sma50').textContent=$('rsi').textContent='—';$('interpretation').textContent='';$('data-status').textContent='Načítám '+symbol+' '+period+' ze Supabase…';
+ const id=++requestId; candles=[];draw();renderSignals();$('scanner-content').textContent='Načítám analýzu…';$('sma20').textContent=$('sma50').textContent=$('rsi').textContent='—';$('interpretation').textContent='';$('data-status').textContent='Načítám '+symbol+' '+period+' ze Supabase…';
  try{
   const {data:auth,error:authError}=await db.auth.getUser();
   if(authError||!auth?.user)throw Error('Přihlášení není aktivní. Obnov stránku a přihlas se.');
@@ -127,7 +131,7 @@ async function load(){
   if(!candles.length){$('data-status').textContent='Pro '+symbol+' '+period+' nejsou dostupná data.';return}
   const last=candles[candles.length-1];
   $('data-status').textContent='Zdroj: RoboForex MT5 · '+candles.length+' historických svíček · poslední svíčka: '+dateLabel(last.candle_time)+' · její uzavření: '+Number(last.close).toFixed(2)+'. Aktuální cena je samostatná kotace Bid/Ask výše a je společná pro všechny timeframe.';
-  draw();
+  draw();renderSignals();
  }catch(e){if(id===requestId)$('data-status').textContent='Data se nepodařilo načíst: '+e.message}
 }
 function render(){
