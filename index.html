@@ -30,24 +30,39 @@ function draw(){
  ctx.strokeStyle='#2d3c53';ctx.lineWidth=1;
  for(let i=0;i<5;i++){const yy=plotTop+i*(plotBottom-plotTop-10)/4;ctx.beginPath();ctx.moveTo(plotLeft,yy);ctx.lineTo(plotRight,yy);ctx.stroke();ctx.fillStyle='#96a7bf';ctx.font='11px sans-serif';ctx.textAlign='left';ctx.fillText((max-i*(max-min)/4).toFixed(2),plotRight+9,yy+4)}
  ctx.strokeStyle='#40536e';ctx.beginPath();ctx.moveTo(plotLeft,plotBottom);ctx.lineTo(plotRight,plotBottom);ctx.stroke();ctx.beginPath();ctx.moveTo(plotRight,plotTop);ctx.lineTo(plotRight,plotBottom);ctx.stroke();
- // MT5-style horizontal time axis: readable labels and day separators.
- const maxLabels=Math.max(2,Math.floor((plotRight-plotLeft)/(period==='M1'?85:125)));
- const every=period==='M1'?5:Math.max(1,Math.ceil(a.length/maxLabels));
+ // MT5-style time axis: mark actual half-hour boundaries on M1, even with missing bars.
  const fmtDate=new Intl.DateTimeFormat('cs-CZ',{timeZone:'Europe/Prague',day:'2-digit',month:'2-digit'});
  const fmtTime=new Intl.DateTimeFormat('cs-CZ',{timeZone:'Europe/Prague',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
- ctx.font='11px system-ui,sans-serif';ctx.textAlign='center';
- let prevDay='';
+ const dateParts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+ const localParts=d=>Object.fromEntries(dateParts.formatToParts(d).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+ const maxLabels=Math.max(2,Math.floor((plotRight-plotLeft)/83));
+ const labels=[];
+ let previousDay='',previousSlot='';
  for(let i=0;i<a.length;i++){
-   const t=new Date(a[i].candle_time),day=fmtDate.format(t),xx=plotLeft+(i+.5)*step;
-   if(day!==prevDay){
+   const t=new Date(a[i].candle_time),p=localParts(t),day=p.year+'-'+p.month+'-'+p.day,xx=plotLeft+(i+.5)*step;
+   if(day!==previousDay){
      ctx.save();ctx.setLineDash([3,5]);ctx.strokeStyle='#53637a';ctx.beginPath();ctx.moveTo(xx,plotTop);ctx.lineTo(xx,plotBottom);ctx.stroke();ctx.restore();
-     prevDay=day;
+     previousDay=day;
    }
-   if(i%every!==0 || (period==='M1' && new Date(a[i].candle_time).getUTCMinutes()%5!==0))continue;
-   ctx.strokeStyle='#51647f';ctx.beginPath();ctx.moveTo(xx,plotBottom);ctx.lineTo(xx,plotBottom+5);ctx.stroke();
-   ctx.fillStyle='#aebed3';
-   const label=period==='D1'?day:(day+' '+fmtTime.format(t));
-   ctx.fillText(label,xx,plotBottom+19);
+   if(period==='M1'){
+     const slot=day+' '+p.hour+':'+(Number(p.minute)<30?'00':'30');
+     if(slot!==previousSlot){previousSlot=slot;labels.push({i,xx,label:fmtTime.format(t),day});}
+   }else{
+     const stride=Math.max(1,Math.ceil(a.length/maxLabels));
+     if(i%stride===0)labels.push({i,xx,label:period==='D1'?fmtDate.format(t):fmtTime.format(t),day});
+   }
+ }
+ // Reserve readable horizontal spacing; show date on the first visible label of each day.
+ ctx.font='11px system-ui,sans-serif';ctx.textAlign='center';
+ let lastX=-Infinity,lastDay='';
+ for(const item of labels){
+   if(item.xx-lastX<66)continue;
+   const label=item.day!==lastDay&&period!=='D1'?fmtDate.format(new Date(a[item.i].candle_time))+' '+item.label:item.label;
+   const halfWidth=ctx.measureText(label).width/2;
+   if(item.xx-halfWidth<plotLeft || item.xx+halfWidth>plotRight)continue;
+   ctx.strokeStyle='#51647f';ctx.beginPath();ctx.moveTo(item.xx,plotBottom);ctx.lineTo(item.xx,plotBottom+5);ctx.stroke();
+   ctx.fillStyle='#aebed3';ctx.fillText(label,item.xx,plotBottom+19);
+   lastX=item.xx;lastDay=item.day;
  }
  ctx.textAlign='start';
  a.forEach((x,i)=>{const xx=plotLeft+(i+.5)*step,up=Number(x.close)>=Number(x.open);ctx.strokeStyle=ctx.fillStyle=up?'#47d7a5':'#ff8291';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(xx,y(x.high));ctx.lineTo(xx,y(x.low));ctx.stroke();const top=y(Math.max(x.open,x.close)),bottom=y(Math.min(x.open,x.close));ctx.fillRect(xx-bw/2,top,bw,Math.max(1,bottom-top))});
