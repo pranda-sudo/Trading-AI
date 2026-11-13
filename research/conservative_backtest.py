@@ -38,12 +38,28 @@ def score(trades):
     for v in vals:eq+=v;peak=max(peak,eq);dd=max(dd,peak-eq)
     return {"n":len(vals),"winrate_pct":round(100*sum(x>0 for x in vals)/len(vals),2),
             "expectancy_R":round(sum(vals)/len(vals),4),"net_R":round(sum(vals),2),"max_drawdown_R":round(dd,2)}
-def test(symbol,rr=2.0,atr_stop=1.5,cost=0.30):
+def rsi_wilder(closes, period=14):
+    """Wilder RSI; values only use current and past closed bars."""
+    out=[None]*len(closes)
+    if len(closes)<=period:return out
+    gains=[max(closes[i]-closes[i-1],0) for i in range(1,len(closes))]
+    losses=[max(closes[i-1]-closes[i],0) for i in range(1,len(closes))]
+    avg_gain=sum(gains[:period])/period
+    avg_loss=sum(losses[:period])/period
+    for i in range(period,len(closes)):
+        if i>period:
+            avg_gain=(avg_gain*(period-1)+gains[i-1])/period
+            avg_loss=(avg_loss*(period-1)+losses[i-1])/period
+        out[i]=100 if avg_loss==0 else 100-100/(1+avg_gain/avg_loss)
+    return out
+
+def test(symbol,rr=2.0,atr_stop=1.5,cost=0.30,rsi_period=None,rsi_long_min=50,rsi_short_max=50):
     data={tf:load(symbol,tf) for tf in ("M5","M15","H1","H4")}
     for tf,b in data.items():
         if len(b)<150:raise RuntimeError(f"Insufficient {tf}: {len(b)} bars")
         for x in b:x["_tf"]=tf
     S={tf:series(b) for tf,b in data.items()}
+    rsi=rsi_wilder(S["M15"]["close"],rsi_period) if rsi_period else None
     b=data["M5"];m=S["M5"];trades=[];next_i=0
     for i in range(110,len(b)-2):
         if i<next_i:continue
@@ -54,6 +70,9 @@ def test(symbol,rr=2.0,atr_stop=1.5,cost=0.30):
         a=trend(S["H1"],j["H1"]);d=trend(S["H4"],j["H4"])
         if a==0 or a!=d:continue
         z=S["M15"];k=j["M15"]
+        if rsi is not None:
+            value=rsi[k]
+            if value is None or (a==1 and value<rsi_long_min) or (a==-1 and value>rsi_short_max):continue
         # M15 pullback to EMA20, then close back on trend side.
         if a==1:
             setup=z["low"][k]<=z["ema20"][k] and z["close"][k]>z["ema20"][k]
