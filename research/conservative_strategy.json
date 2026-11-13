@@ -1,0 +1,31 @@
+{
+  "name": "Trading AI Conservative",
+  "mode": "research_only",
+  "automatic_order_execution": false,
+  "default_decision": "WAIT",
+  "timeframes": {
+    "trend_primary": "H4",
+    "trend_confirmation": "H1",
+    "setup": "M15",
+    "trigger": "M5"
+  },
+  "required_confirmations": {
+    "h4_h1_trend_alignment": true,
+    "m15_support_resistance_retest": true,
+    "m5_closed_candle_confirmation": true,
+    "minimum_reward_risk": 1.5,
+    "maximum_open_signals_per_symbol": 1,
+    "avoid_high_impact_news": true,
+    "news_blackout_minutes_before": 30,
+    "news_blackout_minutes_after": 15,
+    "require_fresh_quote": true,
+    "maximum_quote_age_seconds": 60
+  },
+  "research": {
+    "target": "fewer trades with better out-of-sample expectancy, not guaranteed winrate",
+    "walk_forward_validation_required": true,
+    "broker_tick_cost_validation_required": true,
+    "do_not_use_examined_holdout_for_selection": true
+  },
+  "note": "Configuration proposal only. Existing website and backtester do not automatically consume this file. Trend, retest, M5 confirmation and news blackout require implementation and validation."
+}
