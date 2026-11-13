@@ -92,7 +92,7 @@ async function load(){
   candles=(data||[]).reverse();
   if(!candles.length){$('data-status').textContent='Pro '+symbol+' '+period+' nejsou dostupná data.';return}
   const last=candles[candles.length-1];
-  $('data-status').textContent='Zdroj: RoboForex MT5 · '+candles.length+' svíček · poslední: '+dateLabel(last.candle_time)+' (čas grafu, UTC'+(mt5OffsetHours>=0?'+':'')+mt5OffsetHours+')'. Jde o poslední uloženou svíčku, nikoli živý tick.';
+  $('data-status').textContent='Zdroj: RoboForex MT5 · '+candles.length+' svíček · poslední: '+dateLabel(last.candle_time)+' (čas grafu, UTC'+(mt5OffsetHours>=0?'+':'')+mt5OffsetHours+'). Jde o poslední uloženou svíčku, nikoli živý tick.';
   draw();
  }catch(e){if(id===requestId)$('data-status').textContent='Data se nepodařilo načíst: '+e.message}
 }
