@@ -12,7 +12,7 @@
 import {createClient} from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm";
 import {scan} from "./trend-scanner.js";
 const db=createClient("https://hatzdirgwutbdarpgwro.supabase.co","sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
-const symbols=['XAUUSD','US30','DE40','USTECH','US500'],periods=['M5','M15','H1','H4','D1'];
+const symbols=['XAUUSD','US30','DE40','USTECH','US500'],periods=['M1','M5','M15','H1','H4','D1'];
 let symbol='XAUUSD',period='H1',candles=[],requestId=0;const chartHeight=340,axisHeight=42;const dateLabel=(value,withTime=true)=>new Date(value).toLocaleString('cs-CZ',{timeZone:'Europe/Prague',day:'2-digit',month:'2-digit',year:'numeric',...(withTime?{hour:'2-digit',minute:'2-digit'}:{})});
 const $=id=>document.getElementById(id);
 async function loadQuote(){try{const {data:auth,error:authError}=await db.auth.getUser();if(authError||!auth?.user)return;const requested=symbol;const {data,error}=await db.from('market_quotes').select('bid,ask,quote_time,received_at,point_size,contract_size,volume_min,tick_size,tick_value,swap_long,swap_short,swap_mode,account_currency,currency_profit').eq('symbol',requested).maybeSingle();if(requested!==symbol)return;if(error)throw error;if(!data){$('quote-status').textContent='Čekám na první kotaci z VPS';return}const age=Math.max(0,(Date.now()-new Date(data.quote_time).getTime())/1000);const fresh=age<=45;const fmt=x=>Number(x).toLocaleString('cs-CZ',{maximumFractionDigits:5});$('quote-bid').textContent=fmt(data.bid);$('quote-ask').textContent=fmt(data.ask);$('quote-spread').textContent=fmt(Number(data.ask)-Number(data.bid));$('quote-status').textContent=fresh?'● Aktuální tick MT5':'● Neaktuální kotace ('+Math.round(age)+' s)';$('quote-status').style.color=fresh?'#47d7a5':'#ff8291';$('quote-costs').textContent=data.point_size?('Spread: '+fmt((Number(data.ask)-Number(data.bid))/Number(data.point_size))+' bodů · orientační spread pro 1 lot: '+(data.tick_size>0&&data.tick_value>0?fmt((Number(data.ask)-Number(data.bid))/Number(data.tick_size)*Number(data.tick_value))+' '+(data.account_currency||'měna účtu'):'nelze vypočítat')+' · Swap long/short: '+(data.swap_long??'—')+' / '+(data.swap_short??'—')+' (režim '+(data.swap_mode??'—')+') · Komise: ověřit dle typu účtu MT5'):'Údaje o nákladech čekají na aktualizaci synchronizace VPS';$('quote-time').textContent='Poslední tick: '+dateLabel(data.quote_time)+' (Praha) · stáří '+Math.round(age)+' s · poslední synchronizace: '+dateLabel(data.received_at)+' (Praha)';}catch(e){$('quote-status').textContent='Chyba kotací: '+e.message}}
@@ -31,8 +31,8 @@ function draw(){
  for(let i=0;i<5;i++){const yy=plotTop+i*(plotBottom-plotTop-10)/4;ctx.beginPath();ctx.moveTo(plotLeft,yy);ctx.lineTo(plotRight,yy);ctx.stroke();ctx.fillStyle='#96a7bf';ctx.font='11px sans-serif';ctx.textAlign='left';ctx.fillText((max-i*(max-min)/4).toFixed(2),plotRight+9,yy+4)}
  ctx.strokeStyle='#40536e';ctx.beginPath();ctx.moveTo(plotLeft,plotBottom);ctx.lineTo(plotRight,plotBottom);ctx.stroke();ctx.beginPath();ctx.moveTo(plotRight,plotTop);ctx.lineTo(plotRight,plotBottom);ctx.stroke();
  // MT5-style horizontal time axis: readable labels and day separators.
- const maxLabels=Math.max(2,Math.floor((plotRight-plotLeft)/125));
- const every=Math.max(1,Math.ceil(a.length/maxLabels));
+ const maxLabels=Math.max(2,Math.floor((plotRight-plotLeft)/(period==='M1'?85:125)));
+ const every=period==='M1'?5:Math.max(1,Math.ceil(a.length/maxLabels));
  const fmtDate=new Intl.DateTimeFormat('cs-CZ',{timeZone:'Europe/Prague',day:'2-digit',month:'2-digit'});
  const fmtTime=new Intl.DateTimeFormat('cs-CZ',{timeZone:'Europe/Prague',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
  ctx.font='11px system-ui,sans-serif';ctx.textAlign='center';
@@ -43,7 +43,7 @@ function draw(){
      ctx.save();ctx.setLineDash([3,5]);ctx.strokeStyle='#53637a';ctx.beginPath();ctx.moveTo(xx,plotTop);ctx.lineTo(xx,plotBottom);ctx.stroke();ctx.restore();
      prevDay=day;
    }
-   if(i%every!==0)continue;
+   if(i%every!==0 || (period==='M1' && new Date(a[i].candle_time).getUTCMinutes()%5!==0))continue;
    ctx.strokeStyle='#51647f';ctx.beginPath();ctx.moveTo(xx,plotBottom);ctx.lineTo(xx,plotBottom+5);ctx.stroke();
    ctx.fillStyle='#aebed3';
    const label=period==='D1'?day:(day+' '+fmtTime.format(t));
