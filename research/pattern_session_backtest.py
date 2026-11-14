@@ -25,7 +25,7 @@ def pattern_at_closed(m15):
     # Compute each candle pattern once, without later bars.
     out=[set() for _ in m15]
     for i in range(25,len(m15)):
-        for name,side in pi.detect(m15[:i+1]):
+        for name,side in pi.detect(m15[i-25:i+1]):
             out[i].add((name,side))
     return out
 
