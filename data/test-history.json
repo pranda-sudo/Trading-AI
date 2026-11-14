@@ -1,0 +1,125 @@
+{
+  "runs": [
+    {
+      "id": "pattern-session-2026-11-14",
+      "date": "2026-11-14",
+      "name": "EMA + RSI21 vs. pattern",
+      "cost": "0 (bez spreadů a poplatků)",
+      "status": "historický průzkum, neověřeno",
+      "rows": [
+        {
+          "symbol": "XAUUSD",
+          "session": "ASIA",
+          "baseline_n": 181,
+          "baseline_R": 0.2664,
+          "pattern_n": 53,
+          "pattern_R": 0.2711
+        },
+        {
+          "symbol": "XAUUSD",
+          "session": "EUROPE",
+          "baseline_n": 127,
+          "baseline_R": -0.0214,
+          "pattern_n": 26,
+          "pattern_R": -0.0994
+        },
+        {
+          "symbol": "XAUUSD",
+          "session": "USA",
+          "baseline_n": 283,
+          "baseline_R": 0.0946,
+          "pattern_n": 94,
+          "pattern_R": 0.2565
+        },
+        {
+          "symbol": "US30",
+          "session": "ASIA",
+          "baseline_n": 62,
+          "baseline_R": 0.1027,
+          "pattern_n": 22,
+          "pattern_R": 0.0178
+        },
+        {
+          "symbol": "US30",
+          "session": "EUROPE",
+          "baseline_n": 199,
+          "baseline_R": -0.176,
+          "pattern_n": 62,
+          "pattern_R": -0.1599
+        },
+        {
+          "symbol": "US30",
+          "session": "USA",
+          "baseline_n": 334,
+          "baseline_R": -0.0704,
+          "pattern_n": 106,
+          "pattern_R": 0.0017
+        },
+        {
+          "symbol": "DE40",
+          "session": "EUROPE",
+          "baseline_n": 158,
+          "baseline_R": 0.2679,
+          "pattern_n": 37,
+          "pattern_R": 0.4862
+        },
+        {
+          "symbol": "DE40",
+          "session": "USA",
+          "baseline_n": 336,
+          "baseline_R": 0.045,
+          "pattern_n": 97,
+          "pattern_R": 0.1218
+        },
+        {
+          "symbol": "USTECH",
+          "session": "ASIA",
+          "baseline_n": 60,
+          "baseline_R": 0.0931,
+          "pattern_n": 10,
+          "pattern_R": 0.0909
+        },
+        {
+          "symbol": "USTECH",
+          "session": "EUROPE",
+          "baseline_n": 181,
+          "baseline_R": 0.0792,
+          "pattern_n": 63,
+          "pattern_R": 0.0361
+        },
+        {
+          "symbol": "USTECH",
+          "session": "USA",
+          "baseline_n": 340,
+          "baseline_R": 0.0591,
+          "pattern_n": 86,
+          "pattern_R": -0.0938
+        },
+        {
+          "symbol": "US500",
+          "session": "ASIA",
+          "baseline_n": 58,
+          "baseline_R": 0.2183,
+          "pattern_n": 17,
+          "pattern_R": 0.3168
+        },
+        {
+          "symbol": "US500",
+          "session": "EUROPE",
+          "baseline_n": 187,
+          "baseline_R": -0.1626,
+          "pattern_n": 54,
+          "pattern_R": -0.1911
+        },
+        {
+          "symbol": "US500",
+          "session": "USA",
+          "baseline_n": 389,
+          "baseline_R": -0.1073,
+          "pattern_n": 131,
+          "pattern_R": -0.1959
+        }
+      ]
+    }
+  ]
+}
