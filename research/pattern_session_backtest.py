@@ -60,6 +60,9 @@ def main():
                 for name in matching:counts[name]=counts.get(name,0)+1
             print("\nMARKET",symbol,"COST",cost,"M15 BARS",len(m15),flush=True)
             for name,start,end in SESSIONS:
+                if symbol=="DE40" and name=="ASIA":
+                    print("SKIP DE40 ASIA: market closed / excluded by strategy",flush=True)
+                    continue
                 a=[t for t in baseline if start<=bt.dt(t["time"]).hour<end]
                 b=[t for t in enhanced if start<=bt.dt(t["time"]).hour<end]
                 print("RESULT",symbol,name,"BASE",json.dumps(summarize(a)),flush=True)
