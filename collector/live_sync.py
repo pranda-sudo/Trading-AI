@@ -19,7 +19,7 @@ TERMINAL = os.getenv("TRADING_AI_MT5_PATH", "").strip()
 SYMBOLS = {"XAUUSD": "XAUUSD", "US30": ".US30Cash", "DE40": ".DE40Cash",
            "USTECH": ".USTECHCash", "US500": ".US500Cash"}
 FRAMES = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15,
-          "H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4, "D1": mt5.TIMEFRAME_D1}
+          "H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4, "D1": mt5.TIMEFRAME_D1,\n          "W1": mt5.TIMEFRAME_W1, "MN1": mt5.TIMEFRAME_MN1}
 
 def stamp(epoch):
     return datetime.fromtimestamp(int(epoch), timezone.utc).isoformat()
@@ -84,11 +84,11 @@ def poll():
                                "currency_profit": str(info.currency_profit),
                                "account_currency": str(account.currency)})
             for frame_name, frame in FRAMES.items():
-                # Last 3 bars: exclude the currently forming candle at position 0.
+                # MT5 returns bars oldest-first. W1/MN1 also refresh their forming candle; shorter frames store closed bars only.
                 bars = mt5.copy_rates_from_pos(broker_symbol, frame, 0, 3)
                 if bars is None or len(bars) < 2:
                     continue
-                for bar in bars[:-1]:
+                for bar in (bars[-2:] if frame_name in ('W1', 'MN1') else bars[:-1]):
                     candles.append({"symbol": name, "timeframe": frame_name,
                                     "candle_time": stamp(bar["time"]),
                                     "open": float(bar["open"]), "high": float(bar["high"]),
