@@ -97,9 +97,17 @@ const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;
 function emaLast(values,n){if(values.length<n)return null;const k=2/(n+1);let e=values.slice(0,n).reduce((a,b)=>a+b,0)/n;for(let i=n;i<values.length;i++)e=k*values[i]+(1-k)*e;return e}
 function atrLast(rows,n=14){if(rows.length<n+1)return null;const v=[];for(let i=1;i<rows.length;i++){const p=Number(rows[i-1].close),x=rows[i];v.push(Math.max(Number(x.high)-Number(x.low),Math.abs(Number(x.high)-p),Math.abs(Number(x.low)-p)))}return v.slice(-n).reduce((a,b)=>a+b,0)/n}
 function frameSummary(rows){if(rows.length<210)return null;const close=rows.map(x=>Number(x.close)),last=close.at(-1),e20=emaLast(close,20),e50=emaLast(close,50),e200=emaLast(close,200),r=rsi(close),a=atrLast(rows);const direction=last>e50&&e20>e50&&last>e200?'bull':last<e50&&e20<e50&&last<e200?'bear':'neutral';return {last,e20,e50,e200,r,a,direction,rows}}
-function pivotLevels(rows,price,atr){const recent=rows.slice(-180),pivots=[];for(let i=3;i<recent.length-3;i++){const hi=Number(recent[i].high),lo=Number(recent[i].low);if([1,2,3].every(d=>hi>Number(recent[i-d].high)&&hi>=Number(recent[i+d].high)))pivots.push({value:hi,type:'R'});if([1,2,3].every(d=>lo<Number(recent[i-d].low)&&lo<=Number(recent[i+d].low)))pivots.push({value:lo,type:'S'})}
- const tolerance=Math.max(atr*.35,price*.00015),clusters=[];for(const p of pivots){let c=clusters.find(c=>c.type===p.type&&Math.abs(c.value-p.value)<=tolerance);if(c){c.value=(c.value*c.count+p.value)/(c.count+1);c.count++}else clusters.push({...p,count:1})}
- const below=clusters.filter(c=>c.type==='S'&&c.value<price).sort((a,b)=>b.value-a.value),above=clusters.filter(c=>c.type==='R'&&c.value>price).sort((a,b)=>a.value-b.value);return {support:below[0]?.value??null,resistance:above[0]?.value??null,supportCount:below[0]?.count??0,resistanceCount:above[0]?.count??0}}
+function pivotLevels(rows,price,atr){
+ const recent=rows.slice(-240),pivots=[];
+ for(let i=4;i<recent.length-4;i++){const hi=Number(recent[i].high),lo=Number(recent[i].low);
+ if([1,2,3,4].every(d=>hi>Number(recent[i-d].high)&&hi>=Number(recent[i+d].high)))pivots.push({value:hi,type:'R'});
+ if([1,2,3,4].every(d=>lo<Number(recent[i-d].low)&&lo<=Number(recent[i+d].low)))pivots.push({value:lo,type:'S'});}
+ const tolerance=Math.max(atr*.3,price*.00012),clusters=[];
+ for(const p of pivots){let x=clusters.find(x=>x.type===p.type&&Math.abs(x.value-p.value)<=tolerance);if(x){x.value=(x.value*x.count+p.value)/(x.count+1);x.count++}else clusters.push({...p,count:1})}
+ const choose=(type,above)=>{const all=clusters.filter(x=>x.type===type&&(above?x.value>price:x.value<price)),confirmed=all.filter(x=>x.count>=2);return (confirmed.length?confirmed:all).sort((a,b)=>Math.abs(a.value-price)-Math.abs(b.value-price))[0]||null};
+ const a=choose('S',false),b=choose('R',true);
+ return {support:a?.value??null,resistance:b?.value??null,supportCount:a?.count??0,resistanceCount:b?.count??0,supportConfirmed:!!a&&a.count>=2,resistanceConfirmed:!!b&&b.count>=2};
+}
 async function loadDecision(){const id=++decisionRequestId,requested=symbol,el=$('decision-content');el.textContent='Načítám analýzu pěti timeframe…';try{const {data:auth,error:authError}=await db.auth.getUser();if(authError||!auth?.user)throw Error('Vyžadováno přihlášení');const results=await Promise.all(analysisFrames.map(async tf=>{const {data,error}=await db.from('market_candles').select('candle_time,open,high,low,close').eq('symbol',requested).eq('timeframe',tf).order('candle_time',{ascending:false}).limit(260);if(error)throw error;return {tf,rows:(data||[]).reverse()}}));if(id!==decisionRequestId||requested!==symbol)return;
  const summaries=results.map(x=>({...x,summary:frameSummary(x.rows)}));const valid=summaries.filter(x=>x.summary);if(valid.length<5){el.textContent='Nedostatek historie pro multi-timeframe analýzu. Potřebujeme alespoň 210 svíček pro M1, M5, M15, H1 a H4. Dostupné: '+summaries.map(x=>x.tf+' '+x.rows.length).join(' · ');return}
  const directionName={bull:'Býčí',bear:'Medvědí',neutral:'Neutrální'},directionColor={bull:'#47d7a5',bear:'#ff8291',neutral:'#ffcb77'};
@@ -113,8 +121,13 @@ async function loadDecision(){const id=++decisionRequestId,requested=symbol,el=$
  const sl=action==='LONG'?(levels.support===null?null:levels.support-m5.a*.25):action==='SHORT'?(levels.resistance===null?null:levels.resistance+m5.a*.25):null;
  const rr=sl!==null&&tp!==null?Math.abs(tp-price)/Math.abs(price-sl):null;
  const safe=aligned&&rr!==null&&rr>=1.5&&((action==='LONG'&&tp>price&&sl<price)||(action==='SHORT'&&tp<price&&sl>price));
- const verdict=quote&&safe?action:'VYČKAT';
- const explain=!quote?'Živá kotace MT5 není aktuální. Návrh vstupu je zablokovaný.':!aligned?'H1, H4, M15 a M5 nejsou ve shodě.':rr===null?'Chybí dostatečně potvrzené cenové úrovně.':rr<1.5?'Poměr potenciálního zisku k riziku je pod 1,5 : 1.':'Trend je sladěný, ale před vstupem vyčkej na potvrzení na M1/M5.';
+ const lastM5=m5.rows.at(-1),prevM5=m5.rows.at(-2);
+ const breakout=action==='LONG'?lastM5.close>levels.resistance&&prevM5.close<=levels.resistance:action==='SHORT'?lastM5.close<levels.support&&prevM5.close>=levels.support:false;
+ const freshM5=Date.now()-new Date(lastM5.candle_time).getTime()<20*60000;
+ const newsRisk=typeof newsState==='function'?newsState(requested,new Date()):null;
+ const newsBlocked=!!newsRisk&&/blok|vysok|rizik|pozor|high/i.test(String(newsRisk.label||''));
+ const verdict=quote&&safe&&levels.supportConfirmed&&levels.resistanceConfirmed&&breakout&&freshM5&&!newsBlocked?action:'VYČKAT';
+ const reasons=[];if(!quote)reasons.push('Živá kotace MT5 není aktuální');if(!aligned)reasons.push('H1/H4/M15/M5 nejsou ve shodě');if(!levels.supportConfirmed||!levels.resistanceConfirmed)reasons.push('S/R nemají alespoň dva pivotní dotyky');if(!breakout)reasons.push('M5 nepotvrdila proražení uzavřením svíčky');if(!freshM5)reasons.push('M5 historie není aktuální');if(newsBlocked)reasons.push('Riziko makroekonomické zprávy');if(!safe)reasons.push('Nevyhovující SL/TP nebo R:R');const explain=reasons.length?reasons.join(' · '):'Technicky potvrzený scénář, nikoli obchodní pokyn.';
  const fmt=n=>n===null?'—':Number(n).toFixed(2);
  el.innerHTML='<div class="decision-grid"><div class="decision-cell"><small>Rozhodnutí</small><strong style="color:'+directionColor[verdict==='LONG'?'bull':verdict==='SHORT'?'bear':'neutral']+'">'+verdict+'</strong></div><div class="decision-cell"><small>Support M15</small><strong>'+fmt(levels.support)+'</strong></div><div class="decision-cell"><small>Rezistence M15</small><strong>'+fmt(levels.resistance)+'</strong></div></div><table class="decision-table"><thead><tr><th>Timeframe</th><th>Trend</th><th>RSI</th></tr></thead><tbody>'+summaries.map(x=>'<tr><td>'+x.tf+'</td><td style="color:'+directionColor[x.summary.direction]+'">'+directionName[x.summary.direction]+'</td><td>'+x.summary.r.toFixed(1)+'</td></tr>').join('')+'</tbody></table><div class="decision-detail"><b>Orientační plán:</b> '+(verdict==='VYČKAT'?'Bez potvrzeného vstupu.':verdict+' pouze po potvrzení ceny a svíčkové reakce.')+'<br>Referenční cena '+fmt(price)+(quote?' (aktuální Bid)':' (poslední uložená M5 svíčka, ne živá cena)')+' · SL '+(verdict==='VYČKAT'?'—':fmt(sl))+' · TP '+(verdict==='VYČKAT'?'—':fmt(tp))+' · R:R '+(verdict==='VYČKAT'?'—':rr.toFixed(2)+':1')+'<br>'+esc(explain)+'</div>';
  }catch(e){if(id===decisionRequestId)el.textContent='Analýzu nelze načíst: '+e.message}}
@@ -289,9 +302,9 @@ function updateChartScenarios(){
 function paintChartTradeLevels(ctx,y,plotLeft,plotRight,plotTop,plotBottom){
  if(!$('auto-levels')?.checked)return;
  const t=chartTradeLevels();if(!t)return;
- const lines=[{v:t.levels.support,color:'#47d7a5',name:'S'},{v:t.levels.resistance,color:'#ff8895',name:'R'}];
+ const lines=[{v:t.levels.support,color:'#47d7a5',name:'S',count:t.levels.supportCount},{v:t.levels.resistance,color:'#ff8895',name:'R',count:t.levels.resistanceCount}].filter(x=>x.v!==null).sort((a,b)=>a.v-b.v);
  ctx.save();ctx.font='bold 11px system-ui,sans-serif';
- for(const line of lines){if(line.v===null)continue;const yy=y(line.v);if(yy<plotTop+10||yy>plotBottom-10)continue;ctx.strokeStyle=line.color;ctx.fillStyle=line.color;ctx.setLineDash([7,5]);ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(plotLeft,yy);ctx.lineTo(plotRight,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillText(line.name+' '+t.fmt(line.v),plotLeft+8,Math.max(plotTop+12,yy-5))}
+ let lastLabel=-Infinity;for(const line of lines){const yy=y(line.v);if(yy<plotTop+10||yy>plotBottom-10)continue;ctx.strokeStyle=line.color;ctx.globalAlpha=line.count>=2?1:.45;ctx.setLineDash([7,5]);ctx.lineWidth=line.count>=2?1.8:1;ctx.beginPath();ctx.moveTo(plotLeft,yy);ctx.lineTo(plotRight,yy);ctx.stroke();ctx.setLineDash([]);let ly=Math.max(plotTop+12,yy-6);if(ly-lastLabel<17)ly=lastLabel+17;ly=Math.min(plotBottom-6,ly);lastLabel=ly;ctx.globalAlpha=1;ctx.fillStyle=line.color;ctx.fillText(line.name+' '+t.fmt(line.v)+' ('+line.count+'×)',plotLeft+8,ly)}
  ctx.restore();
 }
 function draw(){
