@@ -1,0 +1,44 @@
+<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trading AI – Ekonomické zprávy</title><style>
+:root{font-family:system-ui,sans-serif;color:#e9f1fc;background:#0b1220}*{box-sizing:border-box}body{margin:0}main{max-width:1200px;margin:auto;padding:24px}header{background:#142137;padding:22px}header>div{max-width:1200px;margin:auto}a{color:#8abaff}h1{margin:12px 0}.muted{color:#b2c4dd;line-height:1.55}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}select,button{background:#223450;color:#fff;border:1px solid #415779;border-radius:9px;padding:11px}button{cursor:pointer}button.active{background:#2161aa}.card{background:#142137;border:1px solid #2c425e;border-radius:12px;padding:18px;margin:16px 0;overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px}td,th{padding:12px;text-align:left;border-bottom:1px solid #2c405b}th{color:#9fb4d1}.impact{display:inline-block;border-radius:7px;padding:4px 8px;font-weight:700}.high{background:#622b39;color:#ffb7bf}.medium{background:#614b24;color:#ffe0a0}.low{background:#29394e;color:#b7c8e0}.event-title{font-weight:650}.detail{color:#b3c7e1;font-size:13px}.scenario{background:#20334c;padding:10px;border-radius:8px;margin:8px 0}.positive{color:#65e1b3}.negative{color:#ffa0a0}</style></head><body>
+<header><div><a href="./index.html">← Trading AI</a><h1>Ekonomické zprávy a kalendář</h1><p class="muted">Události z ekonomického kalendáře MetaTrader 5 · předpovědi, výsledky a podmíněné scénáře pro naše trhy</p></div></header>
+<main><div class="card"><strong>Interpretace trhu</strong><p class="muted">Vyšší nebo nižší skutečná hodnota sama o sobě neznamená automatický LONG či SHORT. Rozhoduje překvapení proti konsenzu, výhled centrálních bank a celkové podmínky. Směrové scénáře jsou hypotézy, nikoli obchodní signály. Čas událostí je zobrazen v místním časovém pásmu zařízení.</p></div>
+<div class="toolbar"><button data-range="today">Dnes</button><button data-range="week" class="active">7 dní</button><button data-range="month">30 dní</button><select id="currency"><option value="">Všechny měny</option><option>USD</option><option>EUR</option></select><select id="impact"><option value="">Všechny důležitosti</option><option value="3">Vysoká</option><option value="2">Střední a vyšší</option></select><button id="refresh">Obnovit</button></div>
+<div id="status" class="muted">Načítám kalendář…</div><div class="card"><table><thead><tr><th>Datum / čas</th><th>Dopad</th><th>Událost</th><th>Předchozí</th><th>Očekávání</th><th>Výsledek</th></tr></thead><tbody id="events"></tbody></table></div><div class="card"><h2>Scénáře dopadu na naše instrumenty</h2><div id="scenarios" class="muted">Klikni na událost v kalendáři.</div></div></main>
+<script type="module">
+import {createClient} from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm";
+import {economicScenarios} from "./economic-impact.js";
+const db=createClient("https://hatzdirgwutbdarpgwro.supabase.co","sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
+const $=id=>document.getElementById(id);let range='week',events=[];
+const importance=n=>n>=3?'Vysoká':n===2?'Střední':'Nižší';
+const impactClass=n=>n>=3?'high':n===2?'medium':'low';
+const format=n=>n===null||n===undefined?'—':String(n);
+function node(tag,text,cls){const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n}
+function render(){
+ const filtered=events.filter(e=>(!$('currency').value||e.currency===$('currency').value)&&(!$('impact').value||e.importance>=Number($('impact').value)));
+ const tbody=$('events');tbody.replaceChildren();
+ for(const e of filtered){
+  const tr=document.createElement('tr');
+  tr.append(node('td',new Date(e.event_time).toLocaleString('cs-CZ',{dateStyle:'medium',timeStyle:'short'})));
+  const td=document.createElement('td');td.append(node('span',importance(e.importance),'impact '+impactClass(e.importance)));tr.append(td);
+  const title=document.createElement('td');title.append(node('div',e.title,'event-title'),node('div',e.currency+' · '+e.country,'detail'));tr.append(title);
+  for(const k of ['previous_value','forecast_value','actual_value'])tr.append(node('td',format(e[k])));
+  tr.style.cursor='pointer';tr.addEventListener('click',()=>showScenario(e));tbody.append(tr);
+ }
+ $('status').textContent=filtered.length?'Načteno '+filtered.length+' událostí · aktualizace databáze probíhá z VPS':'Žádné události v daném období. Pokud importér ještě neběží, kalendář zatím nebude naplněný.';
+ if(filtered.length)showScenario(filtered.find(e=>e.importance>=3)||filtered[0]);
+}
+function showScenario(e){
+ const el=$('scenarios');el.replaceChildren();el.append(node('h3',e.title+' · '+e.currency));
+ for(const line of economicScenarios(e))el.append(node('div',line,'scenario'));
+ el.append(node('p','Tyto scénáře jsou podmíněné. Nezohledňují aktuální pozice, spread, likviditu ani komentář centrální banky.','muted'));
+}
+async function load(){
+ $('status').textContent='Načítám…';const from=new Date(),until=new Date(from);
+ if(range==='today'){from.setHours(0,0,0,0);until.setHours(23,59,59,999)}
+ else until.setDate(until.getDate()+(range==='month'?30:7));
+ const {data,error}=await db.from('economic_events').select('event_key,event_time,currency,country,title,importance,previous_value,forecast_value,actual_value,unit').gte('event_time',from.toISOString()).lte('event_time',until.toISOString()).order('event_time',{ascending:true}).limit(2000);
+ if(error){$('status').textContent='Chyba kalendáře: '+error.message;return}events=data||[];render();
+}
+document.querySelectorAll('[data-range]').forEach(b=>b.addEventListener('click',()=>{range=b.dataset.range;document.querySelectorAll('[data-range]').forEach(x=>x.classList.toggle('active',x===b));load()}));
+$('currency').addEventListener('change',render);$('impact').addEventListener('change',render);$('refresh').addEventListener('click',load);load();
+</script></body></html>
