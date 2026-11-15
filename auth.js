@@ -13,6 +13,7 @@ async function check() {
     if(!["admin","viewer"].includes(data.user.app_metadata?.role)) {await supabase.auth.signOut();showLogin("Tento účet nemá schválený přístup.");return;}
     document.documentElement.classList.add("auth-allowed");
     gate.remove();
+    window.dispatchEvent(new CustomEvent("trading-ai-auth-ready", {detail:{role:data.user.app_metadata?.role}}));
     const btn=document.createElement("button");
     btn.type="button";btn.textContent="Odhlásit se";btn.id="auth-logout";
     btn.addEventListener("click",async()=>{await supabase.auth.signOut();location.reload();});
