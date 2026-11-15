@@ -59,6 +59,7 @@ async function loadDecision(){const id=++decisionRequestId,requested=symbol,el=$
 function drawScanner(){const el=$('scanner-content');$('scanner-period').textContent=symbol+' · '+period;if(!candles.length){el.textContent='Čekám na svíčková data…';return}const x=scan(candles);if(!x.ready){el.textContent=x.message;return}const dir=x.direction==='bull'?'Býčí':x.direction==='bear'?'Medvědí':'Neutrální';const color=x.direction==='bull'?'#47d7a5':x.direction==='bear'?'#ff8291':'#e8c986';const escape=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));el.innerHTML='<div class="scanner-grid"><div class="scanner-box"><small>Směr trhu</small><strong style="color:'+color+'">'+dir+'</strong></div><div class="scanner-box"><small>Shoda směrových indikátorů</small><strong>'+x.agreement+' / 100</strong></div><div class="scanner-box"><small>Síla trendu (ADX)</small><strong>'+(x.adx===null?'—':x.adx.toFixed(1))+'</strong><small>'+escape(x.strength)+'</small></div></div><div class="scanner-meter"><div class="scanner-fill" style="width:'+x.agreement+'%;background:'+color+'"></div></div><div class="scanner-list">'+x.votes.map(v=>'<span class="scanner-tag '+(v.v>0?'bull':v.v<0?'bear':'neutral')+'">'+escape(v.name)+' '+(v.v>0?'▲':v.v<0?'▼':'●')+'</span>').join('')+'</div><p><b>Svíčkové formace:</b> '+(x.patterns.length?x.patterns.map(p=>escape(p.name)).join(', '):'Na poslední svíčce nebyla rozpoznána vybraná formace.')+'</p><p>RSI: '+(x.rsi===null?'—':x.rsi.toFixed(1))+' · ATR: '+(x.atr===null?'—':x.atr.toFixed(2))+' · EMA 200: '+(x.ema200===null?'nedostatek dat':x.ema200.toFixed(2))+'</p><small>Výsledek je orientační. Formace nemusí předpovídat pokračování ani obrat.</small>'}
 const drawingKey=()=>['trading-ai-draw-v1',symbol,period].join(':');
 let drawMode='cursor',drawPoints=[],drawings=[];
+let activeDrawing=-1,dragState=null,suppressDrawingClick=false;
 function loadDrawings(){activeDrawing=-1;try{drawings=JSON.parse(localStorage.getItem(drawingKey())||'[]');if(!Array.isArray(drawings))drawings=[]}catch(e){drawings=[]}drawPoints=[]}
 function saveDrawings(){try{localStorage.setItem(drawingKey(),JSON.stringify(drawings))}catch(e){console.warn('Kresby se nepodařilo uložit',e)}}
 function drawingPoint(event){
@@ -107,7 +108,6 @@ loadDrawings();
 
 // Drag/edit existing drawings: cursor mode selects nearest handle or line.
 // A channel's third handle changes its width; dragging a boundary moves the channel.
-let activeDrawing=-1,dragState=null,suppressDrawingClick=false;
 function drawingGeometry(){
  const rect=$('chart').getBoundingClientRect(),v=chartView(),a=v.a;
  if(!a.length)return null;
