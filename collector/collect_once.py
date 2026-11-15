@@ -24,7 +24,7 @@ TIMEFRAMES = {
     "M15": mt5.TIMEFRAME_M15,
     "H1": mt5.TIMEFRAME_H1,
     "H4": mt5.TIMEFRAME_H4,
-    "D1": mt5.TIMEFRAME_D1,
+    "D1": mt5.TIMEFRAME_D1,\n    "W1": mt5.TIMEFRAME_W1,\n    "MN1": mt5.TIMEFRAME_MN1,
 }
 BAR_LIMIT = 1000
 OUTPUT = Path(__file__).resolve().parent / "data"
