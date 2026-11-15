@@ -7,7 +7,7 @@ const heading=document.createElement("div");heading.className="mc-title";heading
 const status=document.createElement("div");status.className="mc-value";status.style.fontSize="15px";status.textContent="Načítám aktuální titulky…";
 const updated=document.createElement("div");updated.className="mc-note";
 const list=document.createElement("div");list.style.cssText="margin-top:12px;max-height:350px;overflow:auto";
-const note=document.createElement("div");note.className="mc-note";note.textContent="Titulky z veřejného RSS vyhledávání Google News. Nejde o ověřenou analýzu ani predikci směru trhu. Otevři původní článek pro kontext.";
+const note=document.createElement("div");note.className="mc-note";note.textContent="Pouze relevantní titulky za posledních 24 hodin (XAUUSD, US30, DE40, USTECH, US500). Veřejné RSS Google News není ověřená analýza ani predikce směru trhu.";
 tile.append(heading,status,updated,list,note);
 const fmt=t=>new Date(t).toLocaleString("cs-CZ",{day:"numeric",month:"numeric",hour:"2-digit",minute:"2-digit"});
 async function refresh(){
@@ -23,15 +23,17 @@ async function refresh(){
   status.style.color=stale?"#ffcd79":"#6cdbb0";
   updated.textContent="Poslední synchronizace: "+fmt(stamp)+(feed.errors?.length?" · některé zdroje nedostupné":"");
   list.replaceChildren();
-  for(const item of feed.items.slice(0,9)){
+  let shown=0;
+  for(const item of [...feed.items].sort((a,b)=>Date.parse(b.published_utc)-Date.parse(a.published_utc))){
+   if(shown>=9)break;
    const date=Date.parse(item.published_utc);
-   if(!Number.isFinite(date)||!/^https:\/\//.test(item.url))continue;
+   if(!Number.isFinite(date)||date>Date.now()+300000||Date.now()-date>24*60*60*1000||!/^https:\/\//.test(item.url))continue;
    const wrap=document.createElement("div");wrap.style.cssText="padding:9px 0;border-bottom:1px solid #35465f";
    const a=document.createElement("a");a.href=item.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=item.title;a.style.cssText="font-size:13px;line-height:1.45;display:block";
    const meta=document.createElement("div");meta.className="mc-note";meta.style.marginTop="4px";meta.textContent=fmt(date)+" · "+item.source+" · "+item.category;
-   wrap.append(a,meta);list.append(wrap);
+   wrap.append(a,meta);list.append(wrap);shown++;
   }
-  if(!list.children.length)status.textContent="Nejsou dostupné aktuální titulky";
+  if(!list.children.length){status.textContent="Žádné relevantní zprávy za posledních 24 hodin";status.style.color="#ffcd79";}
  }catch(error){
   status.textContent="⚠ Zpravodajský feed zatím není dostupný";
   status.style.color="#ffcd79";
