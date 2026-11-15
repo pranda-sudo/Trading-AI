@@ -5,9 +5,9 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 QUERIES = [
-    ("Geopolitika", "geopolitics sanctions tariffs war oil markets when:2d"),
-    ("Zlato a dolar", "gold dollar treasury yields fed inflation markets when:2d"),
-    ("Akciové indexy", "stocks wall street nasdaq dax economy volatility when:2d"),
+    ("Geopolitika", "geopolitics sanctions tariffs war oil markets when:1d"),
+    ("Zlato a dolar", "gold dollar treasury yields fed inflation markets when:1d"),
+    ("Akciové indexy", "stocks wall street nasdaq dax economy volatility when:1d"),
 ]
 UA = {"User-Agent": "TradingAI-NewsMonitor/1.0 (+public RSS; research)"}
 items = []
@@ -31,12 +31,22 @@ for category, query in QUERIES:
             if not title or not link.startswith("https://") or len(title)>300:
                 continue
             age = (datetime.now(timezone.utc) - published).total_seconds()
-            if age < -3600 or age > 72*3600:
+            if age < -300 or age > 24*3600:
                 continue
             items.append({"title":title, "url":link, "source":source or "Google News",
                           "published_utc":published.isoformat(), "category":category})
     except Exception as exc:
         errors.append(category + ": " + type(exc).__name__)
+# Only market-relevant headlines; broad geopolitical articles without a market link are excluded.
+MARKET_TERMS = re.compile(
+    r"\\b(gold|xauusd|bullion|precious metals|dollar|usd|dxy|treasury|bond yields?|"
+    r"fed|fomc|powell|interest rates?|inflation|cpi|ppi|nfp|payrolls|"
+    r"dow jones|wall street|s&p ?500|sp500|us500|nasdaq|nasdaq 100|"
+    r"us30|ustech|dax|de40|german stocks?|european stocks?|equities|"
+    r"stock markets?|stocks?|oil prices?|crude oil|energy prices?|"
+    r"tariffs?|trade war|sanctions?|market volatility|risk.off|"
+    r"geopolitical risk|iran.*oil|oil.*iran)\\b", re.I)
+items = [item for item in items if MARKET_TERMS.search(item["title"])]
 seen = set()
 unique = []
 for item in sorted(items, key=lambda x:x["published_utc"], reverse=True):
