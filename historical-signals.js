@@ -27,12 +27,13 @@ export function historicalSignals(rows,{maxSignals=8}={}){
  }
  return found.slice(-maxSignals);
 }
-export function paintSignals(ctx,rows,signals,{x,y,plotRight,plotTop,plotBottom,step}){
+export function paintSignals(ctx,rows,signals,{x,y,plotRight,plotTop,plotBottom,step,arrowsOnly=false}){
  ctx.save();ctx.font='bold 11px system-ui,sans-serif';
  for(const s of signals){
   const xx=x(s.index),yy=y(s.entry),isLong=s.side==='LONG',color=isLong?'#5de0b4':'#ff8895';
   const direction=isLong?-1:1,apex=yy+direction*10;
   ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(xx,apex);ctx.lineTo(xx-6,apex+direction* -11);ctx.lineTo(xx+6,apex+direction* -11);ctx.closePath();ctx.fill();
+  if(arrowsOnly)continue;
   // Historical outcome is explicitly labeled; a LONG marker is not a promise of price growth.
   const outcome=s.result==='TP'?'✓ TP':s.result==='SL'?'✕ SL':'?';
   ctx.fillStyle=s.result==='TP'?'#65dcb2':s.result==='SL'?'#ff8895':'#b8c5d9';
