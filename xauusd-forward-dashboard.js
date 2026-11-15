@@ -1,5 +1,5 @@
-import {createClient} from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm";
-const db=createClient("https://hatzdirgwutbdarpgwro.supabase.co","sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
+import {supabase as db} from "./auth.js";
+
 const root=document.createElement("section");
 root.className="card";root.id="xauusd-forward-dashboard";
 root.innerHTML=`
