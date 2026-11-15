@@ -4,7 +4,7 @@ Subsequent invocations compare newly completed simulated trades with a fixed
 60-minute news-entry blackout. No live broker execution is performed.
 Requires SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and requests on trusted VPS.
 """
-import os,json,math,sys
+import os,json,math,sys,requests
 from pathlib import Path
 from datetime import datetime,timezone,timedelta
 import conservative_backtest as bt
@@ -21,6 +21,23 @@ def save(state):
     tmp=STATE.with_suffix(".tmp")
     tmp.write_text(json.dumps(state,indent=2,ensure_ascii=False),encoding="utf-8")
     tmp.replace(STATE)
+def publish(state,kept,blocked):
+    url=os.environ["SUPABASE_URL"].rstrip("/")
+    key=os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    stats=summarize(kept)
+    payload={"id":"XAUUSD_USA","activated_utc":state["activated_utc"],
+      "last_check_utc":state["last_check_utc"],"window_minutes":WINDOW,
+      "cost_price_units":state["cost_price_units"],"total_trades":len(kept)+len(blocked),
+      "kept_trades":len(kept),"blocked_trades":len(blocked),
+      "net_r":stats["net_R"],"winrate_pct":stats["winrate_pct"],
+      "profit_factor":stats["profit_factor"],"max_drawdown_r":stats["max_drawdown_R"],
+      "expectancy_r":stats["expectancy_R"],"status":"research"}
+    response=requests.post(url+"/rest/v1/xauusd_shadow_summary",json=payload,
+      headers={"apikey":key,"Authorization":"Bearer "+key,
+               "Prefer":"resolution=merge-duplicates,return=minimal",
+               "Content-Type":"application/json"},timeout=30)
+    response.raise_for_status()
+
 def main():
     cost=float(os.getenv("BACKTEST_COST_XAUUSD","0.30"))
     if not math.isfinite(cost) or cost<=0:raise ValueError("Invalid cost")
@@ -65,7 +82,7 @@ def main():
     rows=sorted(state["trades"].values(),key=lambda x:x["time"])
     kept=[t for t in rows if not t["blocked_by_news"]]
     blocked=[t for t in rows if t["blocked_by_news"]]
-    print("FORWARD SHADOW XAUUSD USA; activation",state["activated_utc"])
+    publish(state,kept,blocked)\n    print("PUBLISHED shadow summary to Supabase")\n    print("FORWARD SHADOW XAUUSD USA; activation",state["activated_utc"])
     print("All completed simulated trades",len(rows),summarize(rows))
     print("Kept with +/-60min news filter",len(kept),summarize(kept))
     print("Blocked by news",len(blocked),summarize(blocked))
