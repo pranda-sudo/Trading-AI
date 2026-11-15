@@ -10,7 +10,7 @@ async function check() {
   try {
     const {data,error}=await supabase.auth.getUser();
     if(error || !data.user) {showLogin();return;}
-    if(data.user.app_metadata?.role !== "admin") {await supabase.auth.signOut();showLogin("Tento účet nemá schválený přístup.");return;}
+    if(!["admin","viewer"].includes(data.user.app_metadata?.role)) {await supabase.auth.signOut();showLogin("Tento účet nemá schválený přístup.");return;}
     document.documentElement.classList.add("auth-allowed");
     gate.remove();
     const btn=document.createElement("button");
