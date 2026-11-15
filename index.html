@@ -59,7 +59,7 @@ async function loadDecision(){const id=++decisionRequestId,requested=symbol,el=$
 function drawScanner(){const el=$('scanner-content');$('scanner-period').textContent=symbol+' · '+period;if(!candles.length){el.textContent='Čekám na svíčková data…';return}const x=scan(candles);if(!x.ready){el.textContent=x.message;return}const dir=x.direction==='bull'?'Býčí':x.direction==='bear'?'Medvědí':'Neutrální';const color=x.direction==='bull'?'#47d7a5':x.direction==='bear'?'#ff8291':'#e8c986';const escape=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));el.innerHTML='<div class="scanner-grid"><div class="scanner-box"><small>Směr trhu</small><strong style="color:'+color+'">'+dir+'</strong></div><div class="scanner-box"><small>Shoda směrových indikátorů</small><strong>'+x.agreement+' / 100</strong></div><div class="scanner-box"><small>Síla trendu (ADX)</small><strong>'+(x.adx===null?'—':x.adx.toFixed(1))+'</strong><small>'+escape(x.strength)+'</small></div></div><div class="scanner-meter"><div class="scanner-fill" style="width:'+x.agreement+'%;background:'+color+'"></div></div><div class="scanner-list">'+x.votes.map(v=>'<span class="scanner-tag '+(v.v>0?'bull':v.v<0?'bear':'neutral')+'">'+escape(v.name)+' '+(v.v>0?'▲':v.v<0?'▼':'●')+'</span>').join('')+'</div><p><b>Svíčkové formace:</b> '+(x.patterns.length?x.patterns.map(p=>escape(p.name)).join(', '):'Na poslední svíčce nebyla rozpoznána vybraná formace.')+'</p><p>RSI: '+(x.rsi===null?'—':x.rsi.toFixed(1))+' · ATR: '+(x.atr===null?'—':x.atr.toFixed(2))+' · EMA 200: '+(x.ema200===null?'nedostatek dat':x.ema200.toFixed(2))+'</p><small>Výsledek je orientační. Formace nemusí předpovídat pokračování ani obrat.</small>'}
 const drawingKey=()=>['trading-ai-draw-v1',symbol,period].join(':');
 let drawMode='cursor',drawPoints=[],drawings=[];
-function loadDrawings(){try{drawings=JSON.parse(localStorage.getItem(drawingKey())||'[]');if(!Array.isArray(drawings))drawings=[]}catch(e){drawings=[]}drawPoints=[]}
+function loadDrawings(){activeDrawing=-1;try{drawings=JSON.parse(localStorage.getItem(drawingKey())||'[]');if(!Array.isArray(drawings))drawings=[]}catch(e){drawings=[]}drawPoints=[]}
 function saveDrawings(){try{localStorage.setItem(drawingKey(),JSON.stringify(drawings))}catch(e){console.warn('Kresby se nepodařilo uložit',e)}}
 function drawingPoint(event){
  if(!candles.length)return null;
@@ -88,14 +88,100 @@ function paintDrawings(ctx,visible,start,metrics){
   if(d.type==='line'&&p.length>=2)segment(p[0],p[1]);
   if(d.type==='channel'&&p.length>=2){segment(p[0],p[1],true);if(p.length>=3){const shift=p[2].price-p[0].price;segment({time:p[0].time,price:p[0].price+shift},{time:p[1].time,price:p[1].price+shift},true)}}
  }
- ctx.restore();
+ if(activeDrawing>=0&&drawings[activeDrawing]){
+ const d=drawings[activeDrawing];ctx.setLineDash([]);
+ for(let j=0;j<d.points.length;j++){
+  const p=d.points[j],xx=xOf(p);if(xx===null)continue;
+  ctx.fillStyle=j===2?'#ffd37c':'#ffffff';ctx.strokeStyle='#367fe7';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(xx,y(p.price),5,0,Math.PI*2);ctx.fill();ctx.stroke();
+ }
 }
-function setDrawMode(mode){drawMode=mode;drawPoints=[];document.querySelectorAll('[data-draw]').forEach(b=>b.classList.toggle('active',b.dataset.draw===mode));$('draw-hint').textContent=mode==='cursor'?'Prohlížení grafu':mode==='channel'?'Klikni na dva body směru a třetím nastav šířku kanálu':mode==='line'?'Klikni na začátek a konec čáry':'Klikni na cenovou úroveň';draw();}
-$('chart').addEventListener('click',event=>{if(drawMode==='cursor')return;const p=drawingPoint(event);if(!p)return;drawPoints.push(p);const need=drawMode==='horizontal'?1:drawMode==='channel'?3:2;if(drawPoints.length===need){drawings.push({type:drawMode,points:drawPoints});drawPoints=[];saveDrawings()}draw()});
+ctx.restore();
+}
+function setDrawMode(mode){drawMode=mode;drawPoints=[];activeDrawing=-1;document.querySelectorAll('[data-draw]').forEach(b=>b.classList.toggle('active',b.dataset.draw===mode));$('draw-hint').textContent=mode==='cursor'?'Prohlížení grafu':mode==='channel'?'Klikni na dva body směru a třetím nastav šířku kanálu':mode==='line'?'Klikni na začátek a konec čáry':'Klikni na cenovou úroveň';draw();}
+$('chart').addEventListener('click',event=>{if(suppressDrawingClick){suppressDrawingClick=false;return}if(drawMode==='cursor')return;const p=drawingPoint(event);if(!p)return;drawPoints.push(p);const need=drawMode==='horizontal'?1:drawMode==='channel'?3:2;if(drawPoints.length===need){drawings.push({type:drawMode,points:drawPoints});drawPoints=[];saveDrawings()}draw()});
 document.querySelectorAll('[data-draw]').forEach(b=>b.addEventListener('click',()=>setDrawMode(b.dataset.draw)));
 $('draw-undo').addEventListener('click',()=>{if(drawPoints.length)drawPoints.pop();else drawings.pop();saveDrawings();draw()});
-$('draw-clear').addEventListener('click',()=>{if(!confirm('Smazat všechny kresby pro '+symbol+' '+period+'?'))return;drawings=[];drawPoints=[];saveDrawings();draw()});
+$('draw-clear').addEventListener('click',()=>{if(!confirm('Smazat všechny kresby pro '+symbol+' '+period+'?'))return;drawings=[];drawPoints=[];activeDrawing=-1;saveDrawings();draw()});
 loadDrawings();
+
+// Drag/edit existing drawings: cursor mode selects nearest handle or line.
+// A channel's third handle changes its width; dragging a boundary moves the channel.
+let activeDrawing=-1,dragState=null,suppressDrawingClick=false;
+function drawingGeometry(){
+ const rect=$('chart').getBoundingClientRect(),v=chartView(),a=v.a;
+ if(!a.length)return null;
+ const low=Math.min(...a.map(x=>Number(x.low))),high=Math.max(...a.map(x=>Number(x.high))),pad=(high-low)*.08||1,min=low-pad,max=high+pad;
+ const left=4,right=rect.width-78,top=20,bottom=chartHeight-axisHeight,step=(right-left)/a.length;
+ return {rect,left,right,top,bottom,step,start:v.start,min,max:max,priceToY:p=>bottom-10-(p-min)/(max-min)*(bottom-top-20),
+  xFor:p=>{const i=candles.findIndex(x=>x.candle_time===p.time);return i<0?null:left+(i-v.start+.5)*step},
+  priceForY:y=>min+(bottom-10-y)/(bottom-top-20)*(max-min),
+  indexForX:x=>Math.max(0,Math.min(candles.length-1,v.start+Math.floor((x-left)/step)))};
+}
+function channelDistance(d,x,y,g){
+ const p=d.points;if(p.length<2)return Infinity;
+ const x1=g.xFor(p[0]),x2=g.xFor(p[1]);if(x1===null||x2===null||Math.abs(x2-x1)<.01)return Infinity;
+ const y1=g.priceToY(p[0].price),y2=g.priceToY(p[1].price);
+ const base=y1+(y2-y1)*(x-x1)/(x2-x1);
+ const offset=d.type==='channel'&&p[2]?g.priceToY(p[2].price)-y1:0;
+ return Math.min(Math.abs(y-base),Math.abs(y-base-offset));
+}
+function hitDrawing(event){
+ const g=drawingGeometry();if(!g)return null;
+ const x=event.clientX-g.rect.left,y=event.clientY-g.rect.top;
+ if(x<g.left||x>g.right||y<g.top||y>g.bottom)return null;
+ for(let k=drawings.length-1;k>=0;k--){
+  const d=drawings[k];if(!d.points?.length)continue;
+  for(let j=d.points.length-1;j>=0;j--){
+   const p=d.points[j],hx=g.xFor(p),hy=g.priceToY(p.price);
+   if(hx!==null&&Math.hypot(x-hx,y-hy)<12)return {index:k,handle:j,g};
+  }
+  const distance=d.type==='horizontal'?Math.abs(y-g.priceToY(d.points[0].price)):channelDistance(d,x,y,g);
+  if(distance<9)return {index:k,handle:null,g};
+ }
+ return null;
+}
+$('chart').addEventListener('pointerdown',event=>{
+ if(event.button!==0||drawMode!=='cursor')return;
+ const hit=hitDrawing(event);if(!hit){activeDrawing=-1;draw();return}
+ activeDrawing=hit.index;
+ dragState={id:event.pointerId,index:hit.index,handle:hit.handle,
+  x:event.clientX-hit.g.rect.left,y:event.clientY-hit.g.rect.top,
+  original:drawings[hit.index].points.map(p=>({...p})),moved:false,
+  startIndex:hit.g.indexForX(event.clientX-hit.g.rect.left),
+  startPrice:hit.g.priceForY(event.clientY-hit.g.rect.top)};
+ $('chart').setPointerCapture(event.pointerId);event.preventDefault();draw();
+});
+$('chart').addEventListener('pointermove',event=>{
+ if(!dragState||event.pointerId!==dragState.id)return;
+ const g=drawingGeometry();if(!g)return;
+ const x=event.clientX-g.rect.left,y=event.clientY-g.rect.top;
+ if(Math.hypot(x-dragState.x,y-dragState.y)<3&&!dragState.moved)return;
+ dragState.moved=true;
+ const deltaIndex=g.indexForX(x)-dragState.startIndex,deltaPrice=g.priceForY(y)-dragState.startPrice;
+ const orig=dragState.original,updated=orig.map(p=>({...p}));
+ const shift=p=>{const old=candles.findIndex(c=>c.candle_time===p.time);return {...p,time:candles[Math.max(0,Math.min(candles.length-1,old+deltaIndex))]?.candle_time||p.time,price:p.price+deltaPrice}};
+ if(dragState.handle===null){for(let j=0;j<updated.length;j++)updated[j]=shift(orig[j]);}
+ else if(drawings[dragState.index].type==='channel'&&dragState.handle===2){
+  // Width is vertical price separation; third handle is free to reposition.
+  updated[2]={time:candles[g.indexForX(x)].candle_time,price:g.priceForY(y)};
+ }else{
+  updated[dragState.handle]={time:candles[g.indexForX(x)].candle_time,price:g.priceForY(y)};
+  // Channel width is stored relative to first anchor: retain offset on moving it.
+  if(drawings[dragState.index].type==='channel'&&dragState.handle===0&&orig[2]){
+   updated[2]={...orig[2],price:orig[2].price+(updated[0].price-orig[0].price)};
+  }
+ }
+ drawings[dragState.index].points=updated;draw();
+});
+function endDrawingDrag(event){
+ if(!dragState||event.pointerId!==dragState.id)return;
+ if(dragState.moved){saveDrawings();suppressDrawingClick=true;}
+ dragState=null;try{$('chart').releasePointerCapture(event.pointerId)}catch(e){}draw();
+}
+$('chart').addEventListener('pointerup',endDrawingDrag);
+$('chart').addEventListener('pointercancel',endDrawingDrag);
+
 function draw(){
  const c=$('chart'),ctx=c.getContext('2d'),w=c.clientWidth,h=chartHeight,dpr=window.devicePixelRatio||1;
  c.width=Math.max(1,Math.round(w*dpr));c.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
