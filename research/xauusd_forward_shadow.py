@@ -82,7 +82,9 @@ def main():
     rows=sorted(state["trades"].values(),key=lambda x:x["time"])
     kept=[t for t in rows if not t["blocked_by_news"]]
     blocked=[t for t in rows if t["blocked_by_news"]]
-    publish(state,kept,blocked)\n    print("PUBLISHED shadow summary to Supabase")\n    print("FORWARD SHADOW XAUUSD USA; activation",state["activated_utc"])
+    publish(state,kept,blocked)
+    print("PUBLISHED shadow summary to Supabase")
+    print("FORWARD SHADOW XAUUSD USA; activation",state["activated_utc"])
     print("All completed simulated trades",len(rows),summarize(rows))
     print("Kept with +/-60min news filter",len(kept),summarize(kept))
     print("Blocked by news",len(blocked),summarize(blocked))
