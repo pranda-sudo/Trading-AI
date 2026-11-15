@@ -43,6 +43,13 @@ def run():
               "unit":item.get("unit"),"source":"MT5 calendar"
             })
     if not rows:print("No calendar events available; verify MT5 calendar connection.");return
+    original_count=len(rows)
+    unique_rows={}
+    for row in rows:
+        unique_rows[row["event_key"]]=row
+    rows=list(unique_rows.values())
+    if len(rows)!=original_count:
+        print(f"Removed {original_count-len(rows)} duplicate event_key rows")
     endpoint=url+"/rest/v1/economic_events?on_conflict=event_key"
     for start in range(0,len(rows),150):
         payload=json.dumps(rows[start:start+150]).encode()
