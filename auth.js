@@ -1,5 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm";
-const supabase = createClient("https://hatzdirgwutbdarpgwro.supabase.co", "sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
+export const supabase = createClient("https://hatzdirgwutbdarpgwro.supabase.co", "sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
 const gate = document.createElement("div");
 gate.id = "auth-gate";
 gate.innerHTML = `<div class="auth-panel"><div class="auth-mark">◈ Trading AI</div><h1>Zabezpečený přístup</h1><p id="auth-status">Ověřuji přihlášení…</p><form id="auth-form" hidden><label for="auth-email">E-mail</label><input id="auth-email" type="email" autocomplete="username" required placeholder="vas@email.cz"><label for="auth-password">Heslo</label><input id="auth-password" type="password" autocomplete="current-password" required placeholder="Vaše heslo"><button type="submit">Přihlásit se</button></form><p class="auth-foot">Přístup pouze pro schválené uživatele.</p></div>`;
