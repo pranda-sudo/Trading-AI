@@ -17,6 +17,37 @@ async function check() {
     btn.type="button";btn.textContent="Odhlásit se";btn.id="auth-logout";
     btn.addEventListener("click",async()=>{await supabase.auth.signOut();location.reload();});
     document.body.append(btn);
+    if(data.user.app_metadata?.role==="admin"){
+      const manage=document.createElement("button");
+      manage.type="button";
+      manage.id="auth-manage-users";
+      manage.textContent="⚙ Správa uživatelů";
+      manage.style.cssText="position:fixed;right:130px;top:14px;z-index:1000;padding:9px 13px;background:#1757a6;color:#fff;border:1px solid #4b9cf0;border-radius:9px;cursor:pointer";
+      const panel=document.createElement("dialog");
+      panel.id="auth-users-dialog";
+      panel.setAttribute("aria-label","Správa uživatelů");
+      panel.style.cssText="width:min(94vw,560px);max-height:85vh;overflow:auto;background:#142239;color:#eaf1fc;border:1px solid #50617c;border-radius:16px;padding:25px;box-shadow:0 25px 75px #0009";
+      const heading=document.createElement("h2");
+      heading.textContent="Správa uživatelů";
+      const intro=document.createElement("p");
+      intro.textContent="Přístup do Trading AI je řízen rolí v Supabase Auth. Pouze administrátor smí schvalovat a měnit oprávnění.";
+      const current=document.createElement("p");
+      current.textContent="Přihlášený administrátor: "+(data.user.email||"—");
+      const instructions=document.createElement("p");
+      instructions.textContent="Účty, jejich schválení a role spravuj bezpečně v Supabase Authentication → Users. Pro schválení nastav v app_metadata roli viewer; pro správce admin. Role nikdy neměň v user_metadata.";
+      const link=document.createElement("a");
+      link.href="https://supabase.com/dashboard/project/hatzdirgwutbdarpgwro/auth/users";
+      link.target="_blank";link.rel="noopener noreferrer";
+      link.textContent="Otevřít uživatele v Supabase ↗";
+      link.style.cssText="display:inline-block;color:#83bdff;margin:12px 0";
+      const close=document.createElement("button");
+      close.type="button";close.textContent="Zavřít";
+      close.style.cssText="display:block;margin-top:16px;padding:9px 16px;background:#283b55;color:white;border:1px solid #61728c;border-radius:9px;cursor:pointer";
+      close.addEventListener("click",()=>panel.close());
+      panel.append(heading,intro,current,instructions,link,close);
+      document.body.append(panel,manage);
+      manage.addEventListener("click",()=>panel.showModal());
+    }
   } catch(e){showLogin("Nepodařilo se ověřit přihlášení. Zkontroluj připojení.");}
 }
 form.addEventListener("submit",async e=>{
