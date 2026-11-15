@@ -11,12 +11,12 @@
 </section><aside><div class="card"><h2>Obchodní plánovač</h2><p class="note">Zadej vlastní cenu vstupu, stop-loss a cíl. Aplikace vypočítá poměr potenciálního zisku a rizika.</p><label for="side">Směr</label><select id="side"><option value="long">LONG – nákup</option><option value="short">SHORT – prodej</option></select><label for="entry">Vstupní cena</label><input id="entry" type="number" step="any" value="3895"><label for="stop">Stop-loss</label><input id="stop" type="number" step="any" value="3850"><label for="target">Take-profit</label><input id="target" type="number" step="any" value="3955"><button id="calculate" style="width:100%;margin-top:18px">Vypočítat scénář</button><p id="rr" class="note" aria-live="polite"></p></div>
 <div class="card"><h2>Kontrolní seznam před obchodem</h2><div id="checks"></div></div><div class="card"><h2>Další etapa</h2><p class="note">Historická data RoboForex MT5 jsou připojena. Další etapa: ověřit synchronizaci VPS, backtest a kalibrace signálů. Žádné automatické obchody.</p></div></aside></div></main><footer>Trading AI · Výzkumný prototyp · Obchodování je rizikové</footer>
 <script type="module">
-import {createClient} from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm";
+import {supabase as db} from "./auth.js";
 import {scan} from "./trend-scanner.js";
 import {historicalSignals,paintSignals} from "./historical-signals.js";
 import {scanPatterns} from "./chart-patterns.js";
 import {economicRisk,TRACKED_SYMBOLS,DEFAULT_NEWS_WINDOWS} from "./economic-risk.js";
-const db=createClient("https://hatzdirgwutbdarpgwro.supabase.co","sb_publishable_FfWSpPjZSer3hnytJ1q9PA_yM6mEORu");
+
 const economicPanel=document.getElementById('chart-economic-events');
 const macroCard=document.createElement('section');
 macroCard.className='card';macroCard.id='macro-risk-card';
