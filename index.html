@@ -106,7 +106,7 @@ function candleAgeLabel(rows){
  const last=rows?.at(-1);if(!last)return 'Bez dat';
  const age=Date.now()-new Date(last.candle_time).getTime();
  if(!Number.isFinite(age))return 'Neznámé stáří';
- if(age<0)return 'Čas svíčky v budoucnosti';
+ if(age<0)return 'Nesoulad času MT5/UTC: +'+Math.ceil(-age/60000)+' min (signál blokován)';
  const minutes=Math.floor(age/60000);
  return minutes<60?'Před '+minutes+' min':minutes<1440?'Před '+Math.floor(minutes/60)+' h':'Před '+Math.floor(minutes/1440)+' d';
 }
@@ -120,8 +120,8 @@ function renderConfirmLamps(items,reason){
  const el=$('trade-confirm-lamps');if(!el)return;
  const count=items.filter(x=>x.ok).length,all=count===4;
  const weekend=[0,6].includes(new Date().getUTCDay());
- const status=all?'4/4 technicky potvrzeno':count+'/4 potvrzeno';
- el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 12px"><strong style="font-size:1.08rem;color:'+(all?'#47d7a5':'#ffcb77')+'">'+esc(status)+'</strong><small>'+(weekend?'Víkend · čeká se na otevření trhu a nové kotace':'Aktuálnost svíček je součástí potvrzení')+'</small></div><div style="display:flex;flex-wrap:wrap;gap:10px;margin:10px 0">'+items.map(x=>'<div style="flex:1;min-width:125px;padding:12px;border:1px solid '+(x.ok?'#248b6c':'#54647d')+';border-radius:12px;background:#1b2a40"><div style="font-weight:750">'+(x.ok?'🟢':'⚪')+' '+esc(x.name)+'</div><small>'+esc(x.detail)+'</small><div><small style="color:'+(x.fresh?'#8ee3c3':'#ffcb77')+'">'+esc(x.age||'')+'</small></div></div>').join('')+'</div><small style="color:#b8c9df">'+esc(reason)+'</small>';
+ const clockMismatch=items.some(x=>String(x.age||'').includes('Nesoulad času'));const status=clockMismatch?'Čas MT5/UTC nesouhlasí · signály blokovány':all?'4/4 technicky potvrzeno':count+'/4 potvrzeno';
+ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 12px"><strong style="font-size:1.08rem;color:'+(all?'#47d7a5':'#ffcb77')+'">'+esc(status)+'</strong><small>'+(weekend?'Víkend · čeká se na otevření trhu a nové kotace':'Aktuálnost svíček je součástí potvrzení')+'</small></div><div style="display:flex;flex-wrap:wrap;gap:10px;margin:10px 0">'+items.map(x=>'<div style="flex:1;min-width:125px;padding:12px;border:1px solid '+(x.ok?'#248b6c':'#54647d')+';border-radius:12px;background:#1b2a40"><div style="font-weight:750">'+(x.ok?'🟢':String(x.age||'').includes('Nesoulad času')?'🟠':'⚪')+' '+esc(x.name)+'</div><small>'+esc(x.detail)+'</small><div><small style="color:'+(x.fresh?'#8ee3c3':'#ffcb77')+'">'+esc(x.age||'')+'</small></div></div>').join('')+'</div><small style="color:#b8c9df">'+esc(reason)+'</small>';
 }
 const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function emaLast(values,n){if(values.length<n)return null;const k=2/(n+1);let e=values.slice(0,n).reduce((a,b)=>a+b,0)/n;for(let i=n;i<values.length;i++)e=k*values[i]+(1-k)*e;return e}
