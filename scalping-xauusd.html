@@ -1,76 +1,34 @@
 <!doctype html>
-<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>XAUUSD Scalping | Trading AI</title><style>html:not(.auth-allowed) body>:not(#auth-gate){display:none!important}#auth-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;background:#091222;color:#eaf1fc}#auth-gate .auth-panel{width:min(100%,410px);padding:30px;background:#142239;border:1px solid #34455f;border-radius:20px}#auth-gate label{display:block;margin:14px 0 6px}#auth-gate input{width:100%}#auth-gate [hidden]{display:none!important}#auth-gate button{width:100%;margin-top:16px}#auth-logout{position:fixed;right:14px;top:14px;z-index:1000}</style><script type="module" src="./auth.js"></script>
-<style>
-:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#0b1424;color:#e8eef9}*{box-sizing:border-box}
-body{margin:0;padding:24px;max-width:1100px;margin:auto}a{color:#91c4ff}.muted{color:#a9b9d0}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-h1{font-size:28px}h2{font-size:19px;margin:0 0 16px}.panel{background:#142238;border:1px solid #2a3d57;border-radius:18px;padding:22px;margin:18px 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:14px}
-label{display:flex;flex-direction:column;gap:7px;color:#c4d1e3;font-size:14px}
-input,select{width:100%;background:#0b1729;color:#fff;border:1px solid #3a516e;border-radius:9px;padding:11px;font:inherit}
-button{background:#357af1;color:#fff;border:0;border-radius:9px;padding:12px 22px;font-weight:700;cursor:pointer}
-.result{border-left:5px solid #d7a54d;padding:16px;background:#192a42;border-radius:8px;line-height:1.7}
-.result.sell{border-color:#ff7486}.result.buy{border-color:#5dd7aa}
-.small{font-size:13px;color:#a9b9d0}ul{line-height:1.8}strong{color:#fff}
-</style></head><body>
-<header><div><a href="./index.html">← Trading AI</a><h1>XAUUSD · Ranní scalping</h1><p class="muted">M15 trend → M5 potvrzení → M1 vstup · 08:00–10:00 Europe/Prague</p></div><span>ANALÝZA · BEZ EXEKUCE</span></header>
-<section class="panel"><h2>1. Aktuální tržní údaje</h2><p class="small">Hodnoty vyplň z aktuálního MT5. Žádné ceny ani signály se zde automaticky nestahují.</p>
-<div class="grid">
-<label>Čas poslední svíčky / kotace (ČR)<input id="timestamp" type="datetime-local"></label>
-<label>Aktuální cena XAUUSD (USD)<input id="price" type="number" min="0" step="0.01" placeholder="Např. 3723.79"></label>
-<label>Spread (USD na unci)<input id="spread" type="number" min="0" step="0.01" placeholder="Např. 0.35"></label>
-<label>ATR M5 (USD)<input id="atr" type="number" min="0" step="0.01"></label>
-<label>Trend M15<select id="trend"><option value="">Vyber</option><option value="sell">Klesající</option><option value="buy">Rostoucí</option><option value="flat">Boční</option></select></label>
-<label>Potvrzení M5<select id="m5"><option value="">Vyber</option><option value="sell">SELL – uzavření pod hladinou / retest</option><option value="buy">BUY – uzavření nad hladinou / retest</option><option value="none">Bez potvrzení</option></select></label>
-<label>Spouštěč M1<select id="m1"><option value="">Vyber</option><option value="sell">SELL – potvrzený vstup</option><option value="buy">BUY – potvrzený vstup</option><option value="none">Bez potvrzení</option></select></label>
-<label>Vzdálenost SL (USD)<input id="sl" type="number" min="0" step="0.01"></label>
-<label>Vzdálenost TP (USD)<input id="tp" type="number" min="0" step="0.01"></label>
-<label>Riziko obchodu (% equity)<input id="risk" type="number" min="0" step="0.05" value="0.25"></label>
-<label>Dnešní ztráta včetně otevřeného P/L (% equity)<input id="loss" type="number" min="0" step="0.1" value="0"></label>
-<label>Počet dnešních obchodů<input id="trades" type="number" min="0" step="1" value="0"></label>
-<label>Vysoce riziková zpráva do 15 minut?<select id="news"><option value="yes">Ano / nevím</option><option value="no">Ne – ověřeno</option></select></label>
-</div><p><button id="evaluate">Vyhodnotit scalping</button></p></section>
-<section class="panel"><h2>2. Výsledek</h2><div id="result" class="result" role="status" aria-live="polite">VYČKAT · Vyplň aktuální údaje a spusť kontrolu.</div></section>
-<section class="panel"><h2>3. Pravidla ochrany kapitálu</h2><ul>
-<li>Nové vstupy pouze 08:00–09:45 českého času. Po 09:45 už nové pozice neotevírat.</li>
-<li>Maximálně 3 obchody denně, riziko nejvýše 0,5 % equity na obchod, denní limit ztráty 1 % včetně otevřených pozic.</li>
-<li>Minimální R:R 1,5 po orientačním zohlednění spreadu. Spread nejvýše 15 % ATR M5.</li>
-<li>Neobchodovat bez shody M15, M5 a M1; při neaktuálních datech nebo významných zprávách vyčkat.</li>
-<li>Jde o experimentální pravidla pro demo a zpětné testování, nikoli o ověřenou ziskovou strategii.</li>
-</ul><p class="small">Pozor: časové pásmo Europe/Prague respektuje letní a zimní čas. Cena, ATR, SL a TP jsou v USD na trojskou unci; skutečné náklady závisí na specifikaci kontraktu a provizi brokera. Výsledek neobsahuje skluz ani komise. Nepřenášej pozice přes konec seance bez samostatného plánu.</p></section>
-<script>
-const $=id=>document.getElementById(id);
-const num=id=>Number($(id).value);
-function evaluate(){
- const reasons=[];
- const raw=$('timestamp').value;
- const date=raw?new Date(raw):null;
- const now=new Date();
- const formatter=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
- const parts=Object.fromEntries(formatter.formatToParts(now).map(p=>[p.type,p.value]));
- const localNow=parts.year+'-'+parts.month+'-'+parts.day+'T'+parts.hour+':'+parts.minute;
- const minutes=Number(parts.hour)*60+Number(parts.minute);
- if(minutes<480||minutes>=585)reasons.push('Mimo čas nových vstupů (08:00–09:45 ČR).');
- if(!raw||!date||Number.isNaN(date.getTime())||Math.abs(new Date(localNow).getTime()-new Date(raw).getTime())>5*60000)reasons.push('Kotace/svíčka musí být aktuální (max. 5 minut).');
- const p=num('price'),s=num('spread'),a=num('atr'),sl=num('sl'),tp=num('tp');
- if(!p||!a||!sl||!tp||!$('spread').value||s<0)reasons.push('Chybí platná cena, spread, ATR, SL nebo TP.');
- if(a>0&&s/a>0.15)reasons.push('Spread překračuje 15 % ATR M5.');
- if(sl>0&&tp>0&&(tp-s)/(sl+s)<1.5)reasons.push('R:R po orientačním započtení spreadu je pod 1,5.');
- if(num('risk')<=0||num('risk')>0.5)reasons.push('Riziko musí být v rozsahu 0–0,5 % equity na obchod.');
- if(num('loss')>=1)reasons.push('Dosažen denní limit ztráty 1 %.');
- if(num('trades')>=3)reasons.push('Dosažen limit 3 obchodů denně.');
- if($('news').value!=='no')reasons.push('Makroekonomické zprávy nejsou bezpečně vyloučeny.');
- const t=$('trend').value,m=$('m5').value,e=$('m1').value;
- if(!t||t==='flat'||t!==m||m!==e||e==='none')reasons.push('Chybí shoda M15, M5 a M1.');
- const direction=reasons.length?'wait':t;
- const target=$('result');target.className='result '+(direction==='wait'?'':direction);
- const ratio=sl>0?(tp-s)/(sl+s):NaN;
- const title=direction==='wait'?'VYČKAT':direction==='buy'?'PODMÍNKY SPLNĚNY · BUY':'PODMÍNKY SPLNĚNY · SELL';
- const escaped=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
- target.innerHTML='<strong>'+title+'</strong><br>'+ (Number.isFinite(ratio)?'Orientační R:R po spreadu: '+ratio.toFixed(2)+'<br>':'')+
- (reasons.length?'<strong>Důvody:</strong><ul>'+reasons.map(r=>'<li>'+escaped(r)+'</li>').join('')+'</ul>':'Podmínky mechanického filtru jsou splněny. Ověř graf a exekuci ručně; nejde o předpověď ani příkaz k obchodu.')+
- '<div class="small">Vyhodnoceno '+escaped(localNow.replace('T',' '))+' (ČR). Data zadává uživatel.</div>';
-}
-$('evaluate').addEventListener('click',evaluate);
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>XAUUSD · Scalping semafor</title>
+<style>html:not(.auth-allowed) body>:not(#auth-gate){display:none!important}#auth-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;background:#091222;color:#eaf1fc}#auth-gate .auth-panel{width:min(100%,410px);padding:30px;background:#142239;border:1px solid #34455f;border-radius:20px}#auth-gate label{display:block;margin:14px 0 6px}#auth-gate input{width:100%;padding:10px}#auth-gate [hidden]{display:none!important}#auth-gate button{width:100%;margin-top:16px}#auth-logout{position:fixed;right:14px;top:14px;z-index:1000}
+:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#0b1424;color:#e8eef9}*{box-sizing:border-box}body{margin:0 auto;padding:24px;max-width:1120px}a{color:#9acaff}h1{margin:14px 0 8px;font-size:30px}p{color:#a9b9d0;line-height:1.55}.top{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}.panel,.tile{background:#142238;border:1px solid #2a3d57;border-radius:18px;padding:22px}.panel{margin:18px 0}.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.tile h2{font-size:19px;margin:0 0 18px}.signal{font-size:34px;font-weight:800}.buy{color:#54e1a9}.sell{color:#ff7c8d}.wait{color:#ffc46c}.muted{color:#a9b9d0}.small{font-size:13px}.main-signal{font-size:clamp(36px,7vw,68px);font-weight:850;margin:10px 0}.status{font-size:15px}button{background:#347cf1;color:white;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer}button:disabled{opacity:.5}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric{background:#0e1b30;border-radius:12px;padding:15px}.metric b{display:block;font-size:21px;margin-top:6px}ul{line-height:1.8} @media(max-width:720px){.tiles,.metrics{grid-template-columns:1fr}.tile{padding:18px}}</style><script type="module" src="./auth.js"></script></head>
+<body><div class="top"><div><a href="./index.html">← Trading AI</a><h1>XAUUSD · Scalping semafor</h1><p>M15 trend → M5 potvrzení → M1 vstup · aktualizace každých 15 sekund</p></div><button id="refresh">↻ Obnovit</button></div>
+<section class="panel"><div class="small muted">CELKOVÝ ORIENTAČNÍ SIGNÁL · BEZ AUTOMATICKÉHO OBCHODOVÁNÍ</div><div id="overall" class="main-signal wait">VYČKAT</div><div id="reason" class="status">Načítám aktuální data…</div></section>
+<section class="tiles"><div class="tile"><h2>M15 · Směr trendu</h2><div id="m15" class="signal wait">—</div><p id="m15note">Čekám na data</p></div><div class="tile"><h2>M5 · Potvrzení</h2><div id="m5" class="signal wait">—</div><p id="m5note">Čekám na data</p></div><div class="tile"><h2>M1 · Spouštěč</h2><div id="m1" class="signal wait">—</div><p id="m1note">Čekám na data</p></div></section>
+<section class="panel"><div class="metrics"><div class="metric"><span class="muted">Bid / Ask</span><b id="quote">—</b></div><div class="metric"><span class="muted">Spread</span><b id="spread">—</b></div><div class="metric"><span class="muted">Poslední tick</span><b id="tick">—</b></div><div class="metric"><span class="muted">Čas v ČR</span><b id="clock">—</b></div></div><p id="data-status" class="small">Kontroluji data z MT5 přes Supabase…</p></section>
+<section class="panel"><h2>Jak se semafor rozhoduje</h2><p>Pracuje pouze s dokončenými svíčkami. M15 a M5: EMA 9/21 a směr posledních uzavření. M1: EMA 9/21, RSI 14 a změna ceny poslední svíčky. BUY/SELL se ukáže jen při shodě všech tří rámců, přiměřeném spreadu a aktuálních datech. Jinak VYČKAT. Jde o experimentální technické vyhodnocení, nikoliv predikci nebo pokyn k obchodování.</p><p class="small">Není zde kontrola ekonomického kalendáře, skluzu ani likvidity. Před živým obchodováním strategii ověř na historických a demo datech.</p></section>
+<script type="module">
+import {supabase as db} from "./auth.js";
+const $=id=>document.getElementById(id), TF=["M15","M5","M1"], minutes={M15:15,M5:5,M1:1};
+const fmt=(n,d=2)=>Number.isFinite(Number(n))?Number(n).toLocaleString("cs-CZ",{maximumFractionDigits:d}):"—";
+function ema(a,p){let e=a[0],k=2/(p+1);for(let i=1;i<a.length;i++)e=a[i]*k+e*(1-k);return e}
+function rsi(a,p=14){let up=0,down=0;for(let i=a.length-p;i<a.length;i++){let d=a[i]-a[i-1];up+=Math.max(d,0);down+=Math.max(-d,0)}return down===0?(up>0?100:50):100-100/(1+up/down)}
+function analyze(rows,tf){let a=rows.filter(x=>[x.open,x.high,x.low,x.close].every(v=>Number.isFinite(Number(v))&&Number(v)>0)).map(x=>({...x,open:+x.open,close:+x.close}));if(a.length<35)return {side:"WAIT",why:"Nedostatek svíček"};const closes=a.map(x=>x.close),fast=ema(closes,9),slow=ema(closes,21),last=a.at(-1),previous=a.at(-2);let side="WAIT",why="Směr není potvrzen";if(tf==="M1"){const strength=rsi(closes);if(fast>slow&&last.close>fast&&last.close>last.open&&last.close>previous.close&&strength>=50&&strength<=72)side="BUY";if(fast<slow&&last.close<fast&&last.close<last.open&&last.close<previous.close&&strength>=28&&strength<=50)side="SELL";why="EMA 9/21 · RSI "+fmt(strength,1)}else{if(fast>slow&&last.close>fast&&last.close>previous.close)side="BUY";if(fast<slow&&last.close<fast&&last.close<previous.close)side="SELL";why="EMA 9/21 · poslední uzavření"}return {side,why}}
+function paint(id,side,note){const el=$(id);el.textContent=side==="BUY"?"BUY":side==="SELL"?"SELL":"ČEKAT";el.className="signal "+(side==="BUY"?"buy":side==="SELL"?"sell":"wait");$(id+"note").textContent=note}
+function stop(msg){$("overall").textContent="VYČKAT";$("overall").className="main-signal wait";$("reason").textContent=msg}
+let busy=false;
+async function refresh(){if(busy)return;busy=true;$("refresh").disabled=true;try{
+ const {data:auth,error:ae}=await db.auth.getUser();if(ae||!auth?.user)throw Error("Přihlášení není dostupné");
+ const [{data:q,error:qe},...frames]=await Promise.all([db.from("market_quotes").select("bid,ask,quote_time,received_at").eq("symbol","XAUUSD").maybeSingle(),...TF.map(tf=>db.from("market_candles").select("candle_time,open,high,low,close").eq("symbol","XAUUSD").eq("timeframe",tf).order("candle_time",{ascending:false}).limit(100))]);
+ if(qe)throw qe;for(const f of frames)if(f.error)throw f.error;
+ const now=Date.now(),quoteTime=Date.parse(q?.quote_time||""),received=Date.parse(q?.received_at||"");const quoteFresh=q&&Number.isFinite(quoteTime)&&quoteTime<=now+10000&&now-quoteTime<30000&&Number.isFinite(received)&&received<=now+10000&&now-received<45000;
+ const bid=Number(q?.bid),ask=Number(q?.ask),spread=ask-bid;$("quote").textContent=bid>0&&ask>=bid?fmt(bid)+" / "+fmt(ask):"—";$("spread").textContent=Number.isFinite(spread)&&spread>=0?fmt(spread,2)+" USD":"—";$("tick").textContent=Number.isFinite(quoteTime)?new Date(quoteTime).toLocaleTimeString("cs-CZ",{timeZone:"Europe/Prague"}):"—";$("clock").textContent=new Date().toLocaleTimeString("cs-CZ",{timeZone:"Europe/Prague"});
+ let results=[];let freshness=[];
+ for(let i=0;i<TF.length;i++){const tf=TF[i];const rows=(frames[i].data||[]).slice().reverse();const completed=rows.filter(x=>{const t=Date.parse(x.candle_time);return Number.isFinite(t)&&t+minutes[tf]*60000<=now-2000});const latest=completed.at(-1);const age=latest?now-(Date.parse(latest.candle_time)+minutes[tf]*60000):Infinity;const fresh=age>=0&&age<(minutes[tf]*2+1)*60000;const a=analyze(completed,tf);paint(tf.toLowerCase(),fresh?a.side:"WAIT",fresh?a.why:"Svíčky nejsou aktuální");results.push(fresh?a.side:"WAIT");freshness.push(fresh)}
+ const allFresh=freshness.every(Boolean),spreadOk=Number.isFinite(spread)&&spread>=0&&spread<=0.8;
+ $("data-status").textContent=quoteFresh&&allFresh?"● Data jsou aktuální · zdroj RoboForex MT5 přes Supabase":"⚠ Data jsou neaktuální nebo neúplná. Signál je zablokován.";
+ if(!quoteFresh){stop("Není k dispozici aktuální tick MT5.");return}if(!allFresh){stop("Chybí aktuální dokončené svíčky M1/M5/M15.");return}if(!spreadOk){stop("Spread je vyšší než 0,80 USD nebo neplatný.");return}
+ const direction=results.every(s=>s==="BUY")?"BUY":results.every(s=>s==="SELL")?"SELL":"WAIT";$("overall").textContent=direction==="WAIT"?"VYČKAT":direction;$("overall").className="main-signal "+(direction==="BUY"?"buy":direction==="SELL"?"sell":"wait");$("reason").textContent=direction==="WAIT"?"Časové rámce nejsou ve shodě.":"M15, M5 a M1 souhlasí. Před obchodem ověř zprávy, riziko a likviditu.";
+ }catch(e){for(const tf of TF)paint(tf.toLowerCase(),"WAIT","Data nejsou dostupná");$("data-status").textContent="⚠ Chyba načtení dat";stop("Nelze ověřit aktuální trh: "+(e.message||"neznámá chyba"))}finally{busy=false;$("refresh").disabled=false}}
+$("refresh").addEventListener("click",refresh);window.addEventListener("trading-ai-auth-ready",refresh);refresh();setInterval(()=>{if(!document.hidden)refresh()},15000);
 </script></body></html>
