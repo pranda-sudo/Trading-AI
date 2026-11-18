@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XAUUSD Scalping | Trading AI</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#0b1424;color:#e8eef9}*{box-sizing:border-box}
+body{margin:0;padding:24px;max-width:1100px;margin:auto}a{color:#91c4ff}.muted{color:#a9b9d0}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:28px}h2{font-size:19px;margin:0 0 16px}.panel{background:#142238;border:1px solid #2a3d57;border-radius:18px;padding:22px;margin:18px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:14px}
+label{display:flex;flex-direction:column;gap:7px;color:#c4d1e3;font-size:14px}
+input,select{width:100%;background:#0b1729;color:#fff;border:1px solid #3a516e;border-radius:9px;padding:11px;font:inherit}
+button{background:#357af1;color:#fff;border:0;border-radius:9px;padding:12px 22px;font-weight:700;cursor:pointer}
+.result{border-left:5px solid #d7a54d;padding:16px;background:#192a42;border-radius:8px;line-height:1.7}
+.result.sell{border-color:#ff7486}.result.buy{border-color:#5dd7aa}
+.small{font-size:13px;color:#a9b9d0}ul{line-height:1.8}strong{color:#fff}
+</style></head><body>
+<header><div><a href="./index.html">← Trading AI</a><h1>XAUUSD · Ranní scalping</h1><p class="muted">M15 trend → M5 potvrzení → M1 vstup · 08:00–10:00 Europe/Prague</p></div><span>ANALÝZA · BEZ EXEKUCE</span></header>
+<section class="panel"><h2>1. Aktuální tržní údaje</h2><p class="small">Hodnoty vyplň z aktuálního MT5. Žádné ceny ani signály se zde automaticky nestahují.</p>
+<div class="grid">
+<label>Čas poslední svíčky / kotace (ČR)<input id="timestamp" type="datetime-local"></label>
+<label>Aktuální cena XAUUSD (USD)<input id="price" type="number" min="0" step="0.01" placeholder="Např. 3723.79"></label>
+<label>Spread (USD na unci)<input id="spread" type="number" min="0" step="0.01" placeholder="Např. 0.35"></label>
+<label>ATR M5 (USD)<input id="atr" type="number" min="0" step="0.01"></label>
+<label>Trend M15<select id="trend"><option value="">Vyber</option><option value="sell">Klesající</option><option value="buy">Rostoucí</option><option value="flat">Boční</option></select></label>
+<label>Potvrzení M5<select id="m5"><option value="">Vyber</option><option value="sell">SELL – uzavření pod hladinou / retest</option><option value="buy">BUY – uzavření nad hladinou / retest</option><option value="none">Bez potvrzení</option></select></label>
+<label>Spouštěč M1<select id="m1"><option value="">Vyber</option><option value="sell">SELL – potvrzený vstup</option><option value="buy">BUY – potvrzený vstup</option><option value="none">Bez potvrzení</option></select></label>
+<label>Vzdálenost SL (USD)<input id="sl" type="number" min="0" step="0.01"></label>
+<label>Vzdálenost TP (USD)<input id="tp" type="number" min="0" step="0.01"></label>
+<label>Riziko obchodu (% equity)<input id="risk" type="number" min="0" step="0.05" value="0.25"></label>
+<label>Dnešní ztráta včetně otevřeného P/L (% equity)<input id="loss" type="number" min="0" step="0.1" value="0"></label>
+<label>Počet dnešních obchodů<input id="trades" type="number" min="0" step="1" value="0"></label>
+<label>Vysoce riziková zpráva do 15 minut?<select id="news"><option value="yes">Ano / nevím</option><option value="no">Ne – ověřeno</option></select></label>
+</div><p><button id="evaluate">Vyhodnotit scalping</button></p></section>
+<section class="panel"><h2>2. Výsledek</h2><div id="result" class="result" role="status" aria-live="polite">VYČKAT · Vyplň aktuální údaje a spusť kontrolu.</div></section>
+<section class="panel"><h2>3. Pravidla ochrany kapitálu</h2><ul>
+<li>Nové vstupy pouze 08:00–09:45 českého času. Po 09:45 už nové pozice neotevírat.</li>
+<li>Maximálně 3 obchody denně, riziko nejvýše 0,5 % equity na obchod, denní limit ztráty 1 % včetně otevřených pozic.</li>
+<li>Minimální R:R 1,5 po orientačním zohlednění spreadu. Spread nejvýše 15 % ATR M5.</li>
+<li>Neobchodovat bez shody M15, M5 a M1; při neaktuálních datech nebo významných zprávách vyčkat.</li>
+<li>Jde o experimentální pravidla pro demo a zpětné testování, nikoli o ověřenou ziskovou strategii.</li>
+</ul><p class="small">Pozor: časové pásmo Europe/Prague respektuje letní a zimní čas. Cena, ATR, SL a TP jsou v USD na trojskou unci; skutečné náklady závisí na specifikaci kontraktu a provizi brokera. Výsledek neobsahuje skluz ani komise. Nepřenášej pozice přes konec seance bez samostatného plánu.</p></section>
+<script>
+const $=id=>document.getElementById(id);
+const num=id=>Number($(id).value);
+function evaluate(){
+ const reasons=[];
+ const raw=$('timestamp').value;
+ const date=raw?new Date(raw):null;
+ const now=new Date();
+ const formatter=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+ const parts=Object.fromEntries(formatter.formatToParts(now).map(p=>[p.type,p.value]));
+ const localNow=parts.year+'-'+parts.month+'-'+parts.day+'T'+parts.hour+':'+parts.minute;
+ const minutes=Number(parts.hour)*60+Number(parts.minute);
+ if(minutes<480||minutes>=585)reasons.push('Mimo čas nových vstupů (08:00–09:45 ČR).');
+ if(!raw||!date||Number.isNaN(date.getTime())||Math.abs(new Date(localNow).getTime()-new Date(raw).getTime())>5*60000)reasons.push('Kotace/svíčka musí být aktuální (max. 5 minut).');
+ const p=num('price'),s=num('spread'),a=num('atr'),sl=num('sl'),tp=num('tp');
+ if(!p||!a||!sl||!tp||!$('spread').value||s<0)reasons.push('Chybí platná cena, spread, ATR, SL nebo TP.');
+ if(a>0&&s/a>0.15)reasons.push('Spread překračuje 15 % ATR M5.');
+ if(sl>0&&tp>0&&(tp-s)/(sl+s)<1.5)reasons.push('R:R po orientačním započtení spreadu je pod 1,5.');
+ if(num('risk')<=0||num('risk')>0.5)reasons.push('Riziko musí být v rozsahu 0–0,5 % equity na obchod.');
+ if(num('loss')>=1)reasons.push('Dosažen denní limit ztráty 1 %.');
+ if(num('trades')>=3)reasons.push('Dosažen limit 3 obchodů denně.');
+ if($('news').value!=='no')reasons.push('Makroekonomické zprávy nejsou bezpečně vyloučeny.');
+ const t=$('trend').value,m=$('m5').value,e=$('m1').value;
+ if(!t||t==='flat'||t!==m||m!==e||e==='none')reasons.push('Chybí shoda M15, M5 a M1.');
+ const direction=reasons.length?'wait':t;
+ const target=$('result');target.className='result '+(direction==='wait'?'':direction);
+ const ratio=sl>0?(tp-s)/(sl+s):NaN;
+ const title=direction==='wait'?'VYČKAT':direction==='buy'?'PODMÍNKY SPLNĚNY · BUY':'PODMÍNKY SPLNĚNY · SELL';
+ const escaped=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ target.innerHTML='<strong>'+title+'</strong><br>'+ (Number.isFinite(ratio)?'Orientační R:R po spreadu: '+ratio.toFixed(2)+'<br>':'')+
+ (reasons.length?'<strong>Důvody:</strong><ul>'+reasons.map(r=>'<li>'+escaped(r)+'</li>').join('')+'</ul>':'Podmínky mechanického filtru jsou splněny. Ověř graf a exekuci ručně; nejde o předpověď ani příkaz k obchodu.')+
+ '<div class="small">Vyhodnoceno '+escaped(localNow.replace('T',' '))+' (ČR). Data zadává uživatel.</div>';
+}
+$('evaluate').addEventListener('click',evaluate);
+</script></body></html>
