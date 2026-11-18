@@ -5,6 +5,8 @@ on:
     paths:
       - 'index.html'
       - 'strategy-lab.html'
+      - 'scalping-xauusd.html'
+      - 'auth.js'
       - 'live-data.html'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
