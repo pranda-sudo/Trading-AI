@@ -81,6 +81,11 @@ strongLevelsPanel.className='card';
 strongLevelsPanel.id='strong-sr-levels';
 strongLevelsPanel.innerHTML='<h2>Silné supporty a rezistence</h2><p class="note">Potvrzené zóny z uzavřených svíček M15 a H1. Za silnou považujeme úroveň alespoň se 3 samostatnými pivotními dotyky; H1 má přednost. Jde o oblasti, ne přesné ceny.</p><div id="strong-sr-status" class="note">Načítám historická data…</div><div id="strong-sr-content" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px"></div>';
 document.querySelector('#chart')?.closest('.card')?.insertAdjacentElement('afterend',strongLevelsPanel);
+// Priorita pro trading: graf a potvrzené cenové zóny jsou vždy na začátku stránky.
+const chartCard=document.getElementById('primary-chart-card');
+const mainArea=document.querySelector('main');
+if(chartCard&&mainArea){mainArea.insertBefore(chartCard,mainArea.firstElementChild);chartCard.insertAdjacentElement('afterend',strongLevelsPanel);}
+
 let strongSrRequest=0;
 async function refreshStrongLevels(){
  const id=++strongSrRequest,requested=symbol,status=document.getElementById('strong-sr-status'),container=document.getElementById('strong-sr-content');
