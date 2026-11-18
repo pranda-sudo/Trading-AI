@@ -76,6 +76,65 @@ async function refreshEconomicEvents(){
  }
 }
 refreshEconomicEvents();setInterval(refreshEconomicEvents,300000);setInterval(renderMacroRisk,30000);
+const strongLevelsPanel=document.createElement('section');
+strongLevelsPanel.className='card';
+strongLevelsPanel.id='strong-sr-levels';
+strongLevelsPanel.innerHTML='<h2>Silné supporty a rezistence</h2><p class="note">Potvrzené zóny z uzavřených svíček M15 a H1. Za silnou považujeme úroveň alespoň se 3 samostatnými pivotními dotyky; H1 má přednost. Jde o oblasti, ne přesné ceny.</p><div id="strong-sr-status" class="note">Načítám historická data…</div><div id="strong-sr-content" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px"></div>';
+document.querySelector('#chart')?.closest('.card')?.insertAdjacentElement('afterend',strongLevelsPanel);
+let strongSrRequest=0;
+async function refreshStrongLevels(){
+ const id=++strongSrRequest,requested=symbol,status=document.getElementById('strong-sr-status'),container=document.getElementById('strong-sr-content');
+ status.textContent='Ověřuji potvrzené úrovně…';container.replaceChildren();
+ try{
+  const {data:auth,error:ae}=await db.auth.getUser();if(ae||!auth?.user)throw Error('Vyžadováno přihlášení');
+  const frames=await Promise.all(['H1','M15'].map(async tf=>{const {data,error}=await db.from('market_candles').select('candle_time,high,low,close').eq('symbol',requested).eq('timeframe',tf).order('candle_time',{ascending:false}).limit(520);if(error)throw error;return {tf,rows:(data||[]).reverse()}}));
+  if(id!==strongSrRequest||requested!==symbol)return;
+  const price=latestQuote?.symbol===requested&&latestQuote.fresh?(Number(latestQuote.bid)+Number(latestQuote.ask))/2:Number(frames.find(f=>f.tf==='M15')?.rows.at(-1)?.close);
+  if(!Number.isFinite(price)||price<=0)throw Error('Chybí platná cena.');
+  const levels=[];
+  for(const {tf,rows} of frames){
+   if(rows.length<80)continue;
+   const ranges=rows.slice(-100).map(r=>Number(r.high)-Number(r.low)).filter(Number.isFinite);
+   const avgRange=ranges.reduce((a,b)=>a+b,0)/Math.max(1,ranges.length);
+   const tolerance=Math.max(price*.00016,avgRange*(tf==='H1'?.22:.3));
+   const pivots=[];
+   for(let i=4;i<rows.length-4;i++){
+    const hi=Number(rows[i].high),lo=Number(rows[i].low);
+    if(!Number.isFinite(hi)||!Number.isFinite(lo))continue;
+    if([1,2,3,4].every(d=>hi>Number(rows[i-d].high)&&hi>=Number(rows[i+d].high)))pivots.push({value:hi,type:'R',index:i});
+    if([1,2,3,4].every(d=>lo<Number(rows[i-d].low)&&lo<=Number(rows[i+d].low)))pivots.push({value:lo,type:'S',index:i});
+   }
+   const clusters=[];
+   for(const p of pivots){
+    const cluster=clusters.find(c=>c.type===p.type&&Math.abs(c.value-p.value)<=tolerance);
+    if(cluster){cluster.value=(cluster.value*cluster.count+p.value)/(cluster.count+1);cluster.count++;cluster.min=Math.min(cluster.min,p.value);cluster.max=Math.max(cluster.max,p.value)}
+    else clusters.push({type:p.type,value:p.value,count:1,min:p.value,max:p.value});
+   }
+   for(const c of clusters.filter(c=>c.count>=3)){
+    if((c.type==='S'&&c.value>=price)||(c.type==='R'&&c.value<=price))continue;
+    levels.push({...c,tf,weight:c.count*(tf==='H1'?2:1)});
+   }
+  }
+  const selected=['S','R'].flatMap(type=>levels.filter(x=>x.type===type).sort((a,b)=>b.weight-a.weight||Math.abs(a.value-price)-Math.abs(b.value-price)).slice(0,3).sort((a,b)=>Math.abs(a.value-price)-Math.abs(b.value-price)));
+  const fmt=v=>v.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(!selected.length){status.textContent='V načtené historii nejsou potvrzené silné úrovně (alespoň 3 dotyky).';return}
+  const latest=frames.find(f=>f.tf==='M15')?.rows.at(-1)?.candle_time;
+  const age=latest?(Date.now()-new Date(latest).getTime())/60000:Infinity;
+  status.textContent='Referenční cena: '+fmt(price)+' · M15 historie: '+(latest?new Date(latest).toLocaleString('cs-CZ'):'nedostupná')+(age>45?' · ⚠ Historie může být zastaralá':'')+' · '+requested;
+  for(const type of ['S','R']){
+   const group=document.createElement('div');group.style.cssText='background:#1b2a40;border:1px solid #34445d;border-radius:12px;padding:16px';
+   const heading=document.createElement('h3');heading.textContent=type==='S'?'🟢 Silné supporty':'🔴 Silné rezistence';heading.style.margin='0 0 12px';group.append(heading);
+   const items=selected.filter(x=>x.type===type);
+   if(!items.length){const p=document.createElement('p');p.textContent='Žádná potvrzená zóna pod/nad aktuální cenou.';group.append(p)}
+   for(const x of items){const p=document.createElement('p');p.style.margin='9px 0';const lo=Math.min(x.min,x.value-toleranceForDisplay(x)),hi=Math.max(x.max,x.value+toleranceForDisplay(x));p.textContent=fmt(lo)+' – '+fmt(hi)+' USD · '+x.tf+' · '+x.count+' dotyky';group.append(p)}
+   container.append(group);
+  }
+ }catch(e){if(id===strongSrRequest)status.textContent='Úrovně nelze ověřit: '+e.message}
+}
+function toleranceForDisplay(x){return Math.max(x.value*.00005,(x.max-x.min)*.2)}
+refreshStrongLevels();
+setInterval(()=>{if(!document.hidden)refreshStrongLevels()},120000);
+
 const signalPanel=document.createElement('div');signalPanel.className='card';signalPanel.id='historical-signal-panel';signalPanel.hidden=true;signalPanel.style.display='none';signalPanel.innerHTML='<h2>Historické vstupy a obchodní úrovně</h2><label style="display:flex;gap:9px;align-items:center;margin-bottom:12px"><input id="signal-toggle" type="checkbox" checked style="width:auto"> Zobrazit šipky LONG / SHORT v grafu</label><div id="signal-summary" class="note">Čekám na svíčková data…</div><div id="signal-rows" style="overflow-x:auto"></div><p class="note">Signály vznikají až po uzavření potvrzovací svíčky, vstup je modelován na otevření následující svíčky. TP = 2× riziko, SL podle lokálního extrému a ATR. Výsledky jsou orientační, bez spreadu, skluzu a poplatků. Nejde o ověřený backtest ani o automatické pokyny.</p>';document.querySelector('#chart')?.closest('.card')?.insertAdjacentElement('afterend',signalPanel);signalPanel.querySelector('#signal-summary').before(signalNewsBanner);const signalStorageKey='trading-ai-show-historical-signals';let showSignals=true;try{showSignals=localStorage.getItem(signalStorageKey)!=='false'}catch(e){}signalPanel.querySelector('#signal-toggle').checked=showSignals;const detailKey='trading-ai-signal-details';let showSignalDetails=false;try{showSignalDetails=localStorage.getItem(detailKey)==='true'}catch(e){}
 const detailLabel=document.createElement('label');detailLabel.style.cssText='display:flex;gap:9px;align-items:center;margin-bottom:12px';detailLabel.innerHTML='<input id="signal-details-toggle" type="checkbox" style="width:auto"> Zobrazit také popisky vstup / SL / TP';signalPanel.querySelector('#signal-toggle').after(detailLabel);detailLabel.querySelector('input').checked=showSignalDetails;detailLabel.querySelector('input').addEventListener('change',e=>{showSignalDetails=e.target.checked;try{localStorage.setItem(detailKey,String(showSignalDetails))}catch(err){}draw()});signalPanel.querySelector('#signal-toggle').addEventListener('change',e=>{showSignals=e.target.checked;try{localStorage.setItem(signalStorageKey,String(showSignals))}catch(err){}draw()});
 function escapeNewsHtml(value){return String(value).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
