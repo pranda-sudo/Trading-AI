@@ -19,7 +19,8 @@ TERMINAL = os.getenv("TRADING_AI_MT5_PATH", "").strip()
 SYMBOLS = {"XAUUSD": "XAUUSD", "US30": ".US30Cash", "DE40": ".DE40Cash",
            "USTECH": ".USTECHCash", "US500": ".US500Cash"}
 FRAMES = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15,
-          "H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4, "D1": mt5.TIMEFRAME_D1,\n          "W1": mt5.TIMEFRAME_W1, "MN1": mt5.TIMEFRAME_MN1}
+          "H1": mt5.TIMEFRAME_H1, "H4": mt5.TIMEFRAME_H4, "D1": mt5.TIMEFRAME_D1,
+          "W1": mt5.TIMEFRAME_W1, "MN1": mt5.TIMEFRAME_MN1}
 
 def stamp(epoch):
     return datetime.fromtimestamp(int(epoch), timezone.utc).isoformat()
