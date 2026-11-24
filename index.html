@@ -12,6 +12,7 @@
 <div class="card"><h2>Kontrolní seznam před obchodem</h2><div id="checks"></div></div><div class="card"><h2>Další etapa</h2><p class="note">Historická data RoboForex MT5 jsou připojena. Další etapa: ověřit synchronizaci VPS, backtest a kalibrace signálů. Žádné automatické obchody.</p></div></aside></div></main><footer>Trading AI · Výzkumný prototyp · Obchodování je rizikové</footer>
 <script type="module">
 import {supabase as db} from "./auth.js";
+import {inferClock,candleUtc,quoteIsFresh} from "./live-clock.js";
 import {scan} from "./trend-scanner.js";
 import {historicalSignals,paintSignals} from "./historical-signals.js";
 import {scanPatterns} from "./chart-patterns.js";
@@ -124,8 +125,8 @@ async function refreshStrongLevels(){
   const fmt=v=>v.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
   if(!selected.length){status.textContent='V načtené historii nejsou potvrzené silné úrovně (alespoň 3 dotyky).';return}
   const latest=frames.find(f=>f.tf==='M15')?.rows.at(-1)?.candle_time;
-  const age=latest?verifiedCandleAge(latest)/60000:Infinity;
-  status.textContent='Referenční cena: '+fmt(price)+' · M15 historie: '+(latest?new Date(latest).toLocaleString('cs-CZ'):'nedostupná')+(age>45?' · ⚠ Historie může být zastaralá':'')+' · '+requested;
+  const age=Infinity;
+  status.textContent='Referenční cena: '+fmt(price)+' · M15 historie: '+(latest?dateLabel(latest)+' (původní MT5)':'nedostupná')+' · čas aktuálnosti ověřuje rozhodovací panel'+' · '+requested;
   for(const type of ['S','R']){
    const group=document.createElement('div');group.style.cssText='background:#1b2a40;border:1px solid #34445d;border-radius:12px;padding:16px';
    const heading=document.createElement('h3');heading.textContent=type==='S'?'🟢 Silné supporty':'🔴 Silné rezistence';heading.style.margin='0 0 12px';group.append(heading);
@@ -142,7 +143,7 @@ function toleranceForDisplay(x){return Math.max(x.value*.00005,(x.max-x.min)*.2)
 const signalPanel=document.createElement('div');signalPanel.className='card';signalPanel.id='historical-signal-panel';signalPanel.hidden=true;signalPanel.style.display='none';signalPanel.innerHTML='<h2>Historické vstupy a obchodní úrovně</h2><label style="display:flex;gap:9px;align-items:center;margin-bottom:12px"><input id="signal-toggle" type="checkbox" checked style="width:auto"> Zobrazit šipky LONG / SHORT v grafu</label><div id="signal-summary" class="note">Čekám na svíčková data…</div><div id="signal-rows" style="overflow-x:auto"></div><p class="note">Signály vznikají až po uzavření potvrzovací svíčky, vstup je modelován na otevření následující svíčky. TP = 2× riziko, SL podle lokálního extrému a ATR. Výsledky jsou orientační, bez spreadu, skluzu a poplatků. Nejde o ověřený backtest ani o automatické pokyny.</p>';document.querySelector('#chart')?.closest('.card')?.insertAdjacentElement('afterend',signalPanel);signalPanel.querySelector('#signal-summary').before(signalNewsBanner);const signalStorageKey='trading-ai-show-historical-signals';let showSignals=true;try{showSignals=localStorage.getItem(signalStorageKey)!=='false'}catch(e){}signalPanel.querySelector('#signal-toggle').checked=showSignals;const detailKey='trading-ai-signal-details';let showSignalDetails=false;try{showSignalDetails=localStorage.getItem(detailKey)==='true'}catch(e){}
 const detailLabel=document.createElement('label');detailLabel.style.cssText='display:flex;gap:9px;align-items:center;margin-bottom:12px';detailLabel.innerHTML='<input id="signal-details-toggle" type="checkbox" style="width:auto"> Zobrazit také popisky vstup / SL / TP';signalPanel.querySelector('#signal-toggle').after(detailLabel);detailLabel.querySelector('input').checked=showSignalDetails;detailLabel.querySelector('input').addEventListener('change',e=>{showSignalDetails=e.target.checked;try{localStorage.setItem(detailKey,String(showSignalDetails))}catch(err){}draw()});signalPanel.querySelector('#signal-toggle').addEventListener('change',e=>{showSignals=e.target.checked;try{localStorage.setItem(signalStorageKey,String(showSignals))}catch(err){}draw()});
 function escapeNewsHtml(value){return String(value).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
-function renderSignals(){renderNewsBanner();const list=historicalSignals(candles);const countTP=list.filter(s=>s.result==='TP').length,countSL=list.filter(s=>s.result==='SL').length;document.querySelector('#signal-summary').textContent=candles.length<65?'Nedostatek dat pro historické signály.':list.length?'Posledních '+list.length+' nalezených signálů · TP '+countTP+' · SL '+countSL+' · ostatní bez uzavření ve sledovaném horizontu.':'V zobrazeném úseku nejsou potvrzené vstupy.';document.querySelector('#signal-rows').innerHTML=list.length?'<table class="decision-table"><thead><tr><th>Čas MT5</th><th>Směr</th><th>Vstup</th><th>SL</th><th>TP</th><th>Výsledek</th><th>Makro filtr</th></tr></thead><tbody>'+list.map(v=>'<tr><td>'+dateLabel(v.time)+'</td><td style="color:'+(v.side==='LONG'?'#5de0b4':'#ff8895')+'">'+(v.side==='LONG'?'▲ LONG':'▼ SHORT')+'</td><td>'+v.entry.toFixed(2)+'</td><td>'+v.stop.toFixed(2)+'</td><td>'+v.target.toFixed(2)+'</td><td>'+v.result+'</td><td>'+((macroLoaded&&macroEvents.length&&new Date(v.time)>=new Date(Date.now()-3600000))?escapeNewsHtml(newsState(symbol,new Date(v.time)).label):'⚪ Historická zpráva neověřena')+'</td></tr>').join('')+'</tbody></table>':'';return list}
+function renderSignals(){renderNewsBanner();const list=historicalSignals(candles);const countTP=list.filter(s=>s.result==='TP').length,countSL=list.filter(s=>s.result==='SL').length;document.querySelector('#signal-summary').textContent=candles.length<65?'Nedostatek dat pro historické signály.':list.length?'Posledních '+list.length+' nalezených signálů · TP '+countTP+' · SL '+countSL+' · ostatní bez uzavření ve sledovaném horizontu.':'V zobrazeném úseku nejsou potvrzené vstupy.';document.querySelector('#signal-rows').innerHTML=list.length?'<table class="decision-table"><thead><tr><th>Čas MT5</th><th>Směr</th><th>Vstup</th><th>SL</th><th>TP</th><th>Výsledek</th><th>Makro filtr</th></tr></thead><tbody>'+list.map(v=>'<tr><td>'+dateLabel(v.time)+'</td><td style="color:'+(v.side==='LONG'?'#5de0b4':'#ff8895')+'">'+(v.side==='LONG'?'▲ LONG':'▼ SHORT')+'</td><td>'+v.entry.toFixed(2)+'</td><td>'+v.stop.toFixed(2)+'</td><td>'+v.target.toFixed(2)+'</td><td>'+v.result+'</td><td>'+'⚪ Historický čas zpráv neověřen'+'</td></tr>').join('')+'</tbody></table>':'';return list}
 const symbols=['XAUUSD','US30','DE40','USTECH','US500'],periods=['M1','M5','M15','H1','H4','D1','W1','MN1'];
 
 // Přehled pěti trhů: pouze potvrzená data, bez automatického zadávání obchodů.
@@ -161,15 +162,15 @@ async function refreshFiveMarkets(){
    try{
     const [q,...frames]=await Promise.all([
      db.from('market_quotes').select('bid,ask,quote_time,received_at').eq('symbol',name).maybeSingle(),
-     ...['M1','M5','M15','H1'].map(tf=>db.from('market_candles').select('candle_time,open,high,low,close').eq('symbol',name).eq('timeframe',tf).order('candle_time',{ascending:false}).limit(260))
+     ...['M1','M5','M15','H1'].map(tf=>db.from('market_candles').select('candle_time,received_at,open,high,low,close').eq('symbol',name).eq('timeframe',tf).order('candle_time',{ascending:false}).limit(260))
     ]);
     if(q.error||!q.data||frames.some(f=>f.error))throw Error('Chybí kotace nebo historie');
     const quote=q.data,quoteTime=new Date(quote.quote_time||quote.received_at).getTime();
-    const fresh=Number.isFinite(quoteTime)&&Date.now()-quoteTime>=0&&Date.now()-quoteTime<120000;
+    const fresh=quoteIsFresh(quote);
     const series=frames.map((f,i)=>({tf:['M1','M5','M15','H1'][i],rows:(f.data||[]).reverse()}));
-    const m30=aggregateM30(series.find(x=>x.tf==='M15').rows);series.push({tf:'M30',rows:m30});
+    const clock=inferClock(series.find(x=>x.tf==='M1').rows);const m30=aggregateM30(series.find(x=>x.tf==='M15').rows);series.push({tf:'M30',rows:m30});
     const summaries=series.map(x=>({...x,summary:frameSummary(x.rows)}));
-    const complete=fresh&&summaries.every(x=>x.summary&&candleFresh(x.rows,x.tf));
+    const complete=fresh&&summaries.every(x=>x.summary&&candleFresh(x.rows,x.tf,clock));
     const dirs=summaries.map(x=>x.summary?.direction);
     const aligned=complete&&dirs.every(d=>d===dirs[0])&&dirs[0]!=='neutral';
     const risk=newsState(name,new Date());
@@ -218,24 +219,18 @@ function aggregateM30(rows){
  return [...grouped.entries()].sort((a,b)=>a[0]-b[0]).filter(([t,a])=>a.length===2&&Math.abs(new Date(a[1].candle_time)-new Date(a[0].candle_time))===900000).map(([t,a])=>({candle_time:new Date(t).toISOString(),open:a[0].open,high:Math.max(Number(a[0].high),Number(a[1].high)),low:Math.min(Number(a[0].low),Number(a[1].low)),close:a[1].close}));
 }
 
-// Verified broker clock window: 24 Nov 2026, observed UTC+2.
-// Raw candle keys remain unchanged for drawings and historical research.
-function verifiedCandleUtc(value){
- const t=Date.parse(value);
- return Number.isFinite(t)&&t>=Date.UTC(2026,10,24,0)&&t<Date.UTC(2026,10,25,0)?t-7200000:NaN;
-}
-function verifiedCandleAge(value){return Date.now()-verifiedCandleUtc(value);}
-function candleAgeLabel(rows){
+function verifiedCandleAge(value,clock){return Date.now()-candleUtc(value,clock);}
+function candleAgeLabel(rows,clock){
  const last=rows?.at(-1);if(!last)return 'Bez dat';
- const age=verifiedCandleAge(last.candle_time);
+ const age=verifiedCandleAge(last.candle_time,clock);
  if(!Number.isFinite(age))return 'Nesoulad času: období neověřeno (signál blokován)';
  if(age<0)return 'Nesoulad času MT5/UTC: +'+Math.ceil(-age/60000)+' min (signál blokován)';
  const minutes=Math.floor(age/60000);
  return minutes<60?'Před '+minutes+' min':minutes<1440?'Před '+Math.floor(minutes/60)+' h':'Před '+Math.floor(minutes/1440)+' d';
 }
-function candleFresh(rows,tf){
+function candleFresh(rows,tf,clock){
  const last=rows?.at(-1);if(!last)return false;
- const age=verifiedCandleAge(last.candle_time);
+ const age=verifiedCandleAge(last.candle_time,clock);
  const maxAge={M1:5,M5:20,M15:45,M30:75,H1:150}[tf]||20;
  return Number.isFinite(age)&&age>=({M1:1,M5:5,M15:15,M30:30,H1:60}[tf]||1)*60000&&age<maxAge*60000;
 }
@@ -262,13 +257,13 @@ function pivotLevels(rows,price,atr){
  return {support:a?.value??null,resistance:b?.value??null,supportCount:a?.count??0,resistanceCount:b?.count??0,supportConfirmed:!!a&&a.count>=2,resistanceConfirmed:!!b&&b.count>=2};
 }
 function setChartVerdict(verdict,reason){const box=$('chart-verdict');if(!box)return;const color=verdict==='LONG'?'#65dbb1':verdict==='SHORT'?'#ff98a3':'#ffcb77';box.innerHTML='<strong style="color:'+color+';font-size:22px">'+esc(verdict)+'</strong><div style="color:#b9c9df;margin-top:5px">'+esc(reason)+'</div>'}
-async function loadDecision(){const id=++decisionRequestId,requested=symbol,el=$('decision-content');el.textContent='Načítám potvrzení M1 / M5 / M30 / H1…';try{const {data:auth,error:authError}=await db.auth.getUser();if(authError||!auth?.user)throw Error('Vyžadováno přihlášení');const results=await Promise.all(['M1','M5','M15','H1'].map(async tf=>{const {data,error}=await db.from('market_candles').select('candle_time,open,high,low,close').eq('symbol',requested).eq('timeframe',tf).order('candle_time',{ascending:false}).limit(tf==='M15'?520:260);if(error)throw error;return {tf,rows:(data||[]).reverse()}}));if(id!==decisionRequestId||requested!==symbol)return;results.push({tf:'M30',rows:aggregateM30(results.find(x=>x.tf==='M15').rows)});
+async function loadDecision(){const id=++decisionRequestId,requested=symbol,el=$('decision-content');el.textContent='Načítám potvrzení M1 / M5 / M30 / H1…';try{const {data:auth,error:authError}=await db.auth.getUser();if(authError||!auth?.user)throw Error('Vyžadováno přihlášení');const results=await Promise.all(['M1','M5','M15','H1'].map(async tf=>{const {data,error}=await db.from('market_candles').select('candle_time,received_at,open,high,low,close').eq('symbol',requested).eq('timeframe',tf).order('candle_time',{ascending:false}).limit(tf==='M15'?520:260);if(error)throw error;return {tf,rows:(data||[]).reverse()}}));if(id!==decisionRequestId||requested!==symbol)return;const clock=inferClock(results.find(x=>x.tf==='M1').rows);results.push({tf:'M30',rows:aggregateM30(results.find(x=>x.tf==='M15').rows)});
  const summaries=results.map(x=>({...x,summary:frameSummary(x.rows)}));const valid=summaries.filter(x=>x.summary);if(valid.length<5){setChartVerdict('VYČKAT','Nedostatek historie pro potvrzení signálu.');renderConfirmLamps(['H1','M30','M5','M1'].map(name=>({name,ok:false,detail:'Čeká na historii'})),'M30 je sestavena z úplných dvojic M15 svíček.');el.textContent='Nedostatek historie pro analýzu (min. 210 uzavřených svíček pro každý rámec): '+summaries.map(x=>x.tf+' '+x.rows.length).join(' · ');return}
  const directionName={bull:'Býčí',bear:'Medvědí',neutral:'Neutrální'},directionColor={bull:'#47d7a5',bear:'#ff8291',neutral:'#ffcb77'};
  const h1=valid.find(x=>x.tf==='H1').summary,m30=valid.find(x=>x.tf==='M30').summary,m5=valid.find(x=>x.tf==='M5').summary,m1=valid.find(x=>x.tf==='M1').summary;
  const higher=h1.direction==='bull'||h1.direction==='bear'?h1.direction:'neutral';
  const aligned=higher!=='neutral'&&m30.direction===higher&&m5.direction===higher&&m1.direction===higher;
- const quote=latestQuote?.symbol===requested&&latestQuote.fresh?latestQuote:null;
+ const quote=latestQuote?.symbol===requested&&latestQuote.fresh&&Date.now()-Date.parse(latestQuote.quoteTime)>=0&&Date.now()-Date.parse(latestQuote.quoteTime)<=45000?latestQuote:null;
  const price=quote?quote.bid:m5.last,levels=pivotLevels(valid.find(x=>x.tf==='M30').rows,price,m30.a);
  const action=aligned?(higher==='bull'?'LONG':'SHORT'):'VYČKAT';
  const tp=action==='LONG'?levels.resistance:action==='SHORT'?levels.support:null;
@@ -277,14 +272,14 @@ async function loadDecision(){const id=++decisionRequestId,requested=symbol,el=$
  const safe=aligned&&rr!==null&&rr>=1.5&&((action==='LONG'&&tp>price&&sl<price)||(action==='SHORT'&&tp<price&&sl>price));
  const lastM5=m5.rows.at(-1),prevM5=m5.rows.at(-2);
  const breakout=action==='LONG'?lastM5.close>levels.resistance&&prevM5.close<=levels.resistance:action==='SHORT'?lastM5.close<levels.support&&prevM5.close>=levels.support:false;
- const freshM5=candleFresh(m5.rows,'M5');
- const lastM1=m1.rows.at(-1),prevM1=m1.rows.at(-2),freshM1=candleFresh(m1.rows,'M1');
+ const freshM5=candleFresh(m5.rows,'M5',clock);
+ const lastM1=m1.rows.at(-1),prevM1=m1.rows.at(-2),freshM1=candleFresh(m1.rows,'M1',clock);
  const entryM1=aligned&&freshM1&&(higher==='bull'?Number(lastM1.close)>Number(lastM1.open)&&Number(lastM1.close)>Number(prevM1.high):Number(lastM1.close)<Number(lastM1.open)&&Number(lastM1.close)<Number(prevM1.low));
  const newsRisk=typeof newsState==='function'?newsState(requested,new Date()):null;
- const newsBlocked=!!newsRisk&&/blok|vysok|rizik|pozor|high/i.test(String(newsRisk.label||''));
- const verdict=quote&&safe&&levels.supportConfirmed&&levels.resistanceConfirmed&&breakout&&entryM1&&freshM5&&candleFresh(h1.rows,'H1')&&candleFresh(m30.rows,'M30')&&!newsBlocked?action:'VYČKAT';
- const reasons=[];if(!quote)reasons.push('Živá kotace MT5 není aktuální');if(!aligned)reasons.push('H1/M30/M5/M1 nejsou ve shodě');if(!entryM1)reasons.push('M1 nepotvrdila vstupní svíčku');if(!levels.supportConfirmed||!levels.resistanceConfirmed)reasons.push('S/R nemají alespoň dva pivotní dotyky');if(!breakout)reasons.push('M5 nepotvrdila proražení uzavřením svíčky');if(!freshM5)reasons.push('M5 historie není aktuální');if(!candleFresh(h1.rows,'H1')||!candleFresh(m30.rows,'M30'))reasons.push('H1 nebo M30 historie není aktuální');if(newsBlocked)reasons.push('Riziko makroekonomické zprávy');if(!safe)reasons.push('Nevyhovující SL/TP nebo R:R');const explain=reasons.length?reasons.join(' · '):'Technicky potvrzený scénář, nikoli obchodní pokyn.';
- renderConfirmLamps([{name:'H1',ok:higher!=='neutral'&&candleFresh(h1.rows,'H1'),fresh:candleFresh(h1.rows,'H1'),age:candleAgeLabel(h1.rows),detail:directionName[h1.direction]},{name:'M30',ok:higher!=='neutral'&&m30.direction===higher&&candleFresh(m30.rows,'M30'),fresh:candleFresh(m30.rows,'M30'),age:candleAgeLabel(m30.rows),detail:directionName[m30.direction]+' · z M15'},{name:'M5',ok:higher!=='neutral'&&m5.direction===higher&&breakout&&freshM5,fresh:freshM5,age:candleAgeLabel(m5.rows),detail:directionName[m5.direction]+' · průraz'},{name:'M1',ok:higher!=='neutral'&&m1.direction===higher&&entryM1,fresh:freshM1,age:candleAgeLabel(m1.rows),detail:directionName[m1.direction]+' · vstup'}],'Zelené kontrolky vyžadují čerstvá data. Pro LONG/SHORT musí navíc vyhovět živá kotace, S/R, R:R a zprávy.');
+ const newsBlocked=newsRisk?.kind!=='clear';
+ const verdict=quote&&safe&&levels.supportConfirmed&&levels.resistanceConfirmed&&breakout&&entryM1&&freshM5&&candleFresh(h1.rows,'H1',clock)&&candleFresh(m30.rows,'M30',clock)&&!newsBlocked?action:'VYČKAT';
+ const reasons=[];if(!quote)reasons.push('Živá kotace MT5 není aktuální');if(!aligned)reasons.push('H1/M30/M5/M1 nejsou ve shodě');if(!entryM1)reasons.push('M1 nepotvrdila vstupní svíčku');if(!levels.supportConfirmed||!levels.resistanceConfirmed)reasons.push('S/R nemají alespoň dva pivotní dotyky');if(!breakout)reasons.push('M5 nepotvrdila proražení uzavřením svíčky');if(!freshM5)reasons.push('M5 historie není aktuální');if(!candleFresh(h1.rows,'H1',clock)||!candleFresh(m30.rows,'M30',clock))reasons.push('H1 nebo M30 historie není aktuální');if(newsBlocked)reasons.push('Riziko makroekonomické zprávy');if(!safe)reasons.push('Nevyhovující SL/TP nebo R:R');const explain=reasons.length?reasons.join(' · '):'Technicky potvrzený scénář, nikoli obchodní pokyn.';
+ renderConfirmLamps([{name:'H1',ok:higher!=='neutral'&&candleFresh(h1.rows,'H1',clock),fresh:candleFresh(h1.rows,'H1',clock),age:candleAgeLabel(h1.rows,clock),detail:directionName[h1.direction]},{name:'M30',ok:higher!=='neutral'&&m30.direction===higher&&candleFresh(m30.rows,'M30',clock),fresh:candleFresh(m30.rows,'M30',clock),age:candleAgeLabel(m30.rows,clock),detail:directionName[m30.direction]+' · z M15'},{name:'M5',ok:higher!=='neutral'&&m5.direction===higher&&breakout&&freshM5,fresh:freshM5,age:candleAgeLabel(m5.rows,clock),detail:directionName[m5.direction]+' · průraz'},{name:'M1',ok:higher!=='neutral'&&m1.direction===higher&&entryM1,fresh:freshM1,age:candleAgeLabel(m1.rows,clock),detail:directionName[m1.direction]+' · vstup'}],'Zelené kontrolky vyžadují čerstvá data. Pro LONG/SHORT musí navíc vyhovět živá kotace, S/R, R:R a zprávy.');
  setChartVerdict(verdict,explain);
  const fmt=n=>n===null?'—':Number(n).toFixed(2);
  el.innerHTML='<div class="decision-grid"><div class="decision-cell"><small>Rozhodnutí</small><strong style="color:'+directionColor[verdict==='LONG'?'bull':verdict==='SHORT'?'bear':'neutral']+'">'+verdict+'</strong></div><div class="decision-cell"><small>Support M30</small><strong>'+fmt(levels.support)+'</strong></div><div class="decision-cell"><small>Rezistence M30</small><strong>'+fmt(levels.resistance)+'</strong></div></div><table class="decision-table"><thead><tr><th>Timeframe</th><th>Trend</th><th>RSI</th></tr></thead><tbody>'+summaries.map(x=>'<tr><td>'+x.tf+'</td><td style="color:'+directionColor[x.summary.direction]+'">'+directionName[x.summary.direction]+'</td><td>'+x.summary.r.toFixed(1)+'</td></tr>').join('')+'</tbody></table><div class="decision-detail"><b>Orientační plán:</b> '+(verdict==='VYČKAT'?'Bez potvrzeného vstupu.':verdict+' pouze po potvrzení ceny a svíčkové reakce.')+'<br>Referenční cena '+fmt(price)+(quote?' (aktuální Bid)':' (poslední uložená M5 svíčka, ne živá cena)')+' · SL '+(verdict==='VYČKAT'?'—':fmt(sl))+' · TP '+(verdict==='VYČKAT'?'—':fmt(tp))+' · R:R '+(verdict==='VYČKAT'?'—':rr.toFixed(2)+':1')+'<br>'+esc(explain)+'</div>';
@@ -554,7 +549,7 @@ async function load(){
   visibleBars=Math.min(260,candles.length);
   if(!candles.length){$('data-status').textContent='Pro '+symbol+' '+period+' nejsou v Supabase uložená historická data. Je nutné je nejprve exportovat z MT5.';return}
   const last=candles[candles.length-1];
-  $('data-status').textContent='Zdroj: RoboForex MT5 · '+candles.length+' historických svíček · poslední svíčka: '+dateLabel(last.candle_time)+' · její uzavření: '+Number(last.close).toFixed(2)+'. Aktuální cena je samostatná kotace Bid/Ask. Graf zachovává původní čas MT5; živá analýza používá korekci jen v ověřeném období 24. 11. 2026.';
+  $('data-status').textContent='Zdroj: RoboForex MT5 · '+candles.length+' historických svíček · poslední svíčka: '+dateLabel(last.candle_time)+' · její uzavření: '+Number(last.close).toFixed(2)+'. Aktuální cena je samostatná kotace Bid/Ask. Graf zachovává původní čas MT5; živá analýza ověřuje čas podle posledních tří M1 svíček.';
   draw();updateChartScenarios();renderSignals();
  }catch(e){if(id===requestId)$('data-status').textContent='Data se nepodařilo načíst: '+e.message}
 }
