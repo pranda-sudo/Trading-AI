@@ -27,7 +27,7 @@ def stamp(epoch):
 
 # Explicit broker timestamp correction for quotes only.
 # Keep legacy candle keys unchanged until historical migration is validated.
-QUOTE_OFFSET_MINUTES = int(os.getenv("TRADING_AI_QUOTE_OFFSET_MINUTES", "0"))
+QUOTE_OFFSET_MINUTES = int(os.getenv("TRADING_AI_QUOTE_OFFSET_MINUTES", "120"))
 
 def quote_stamp(epoch, now=None):
     now = time.time() if now is None else now
@@ -71,7 +71,7 @@ def poll():
             raise RuntimeError("MT5 is not logged in")
         if EXPECTED_LOGIN and str(account.login) != EXPECTED_LOGIN:
             raise RuntimeError("Wrong MT5 account; check TRADING_AI_MT5_LOGIN")
-        quotes, candles = [], []
+        quotes, candles, forming = [], [], []
         for name, broker_symbol in SYMBOLS.items():
             info = mt5.symbol_info(broker_symbol)
             if info is None:
@@ -100,6 +100,21 @@ def poll():
                 bars = mt5.copy_rates_from_pos(broker_symbol, frame, 0, 3)
                 if bars is None or len(bars) < 2:
                     continue
+                if frame_name in ("M1", "M5", "M15") and tick is not None:
+                    bar = bars[-1]
+                    now = time.time()
+                    offset = QUOTE_OFFSET_MINUTES * 60
+                    tick_utc = int(tick.time) - offset
+                    start_utc = int(bar["time"]) - offset
+                    duration = {"M1": 60, "M5": 300, "M15": 900}[frame_name]
+                    if offset in (0, 7200, 10800) and 0 <= now - tick_utc <= 45 and start_utc <= tick_utc < start_utc + duration and start_utc <= now < start_utc + duration:
+                        forming.append({"symbol": name, "timeframe": frame_name,
+                                        "candle_time": stamp(bar["time"]),
+                                        "candle_time_utc": stamp(start_utc),
+                                        "open": float(bar["open"]), "high": float(bar["high"]),
+                                        "low": float(bar["low"]), "close": float(bar["close"]),
+                                        "tick_volume": int(bar["tick_volume"]),
+                                        "received_at": stamp(now)})
                 for bar in (bars[-2:] if frame_name in ('W1', 'MN1') else bars[:-1]):
                     candles.append({"symbol": name, "timeframe": frame_name,
                                     "candle_time": stamp(bar["time"]),
@@ -110,7 +125,11 @@ def poll():
                                     "real_volume": int(bar["real_volume"])})
         upsert("market_quotes", quotes, "symbol")
         upsert("market_candles", candles, "symbol,timeframe,candle_time")
-        print(datetime.now(timezone.utc).isoformat(), "quotes", len(quotes),
+        try:
+            upsert("market_forming_candles", forming, "symbol,timeframe")
+        except Exception as exc:
+            print("FORMING SYNC ERROR:", str(exc), flush=True)
+        print(datetime.now(timezone.utc).isoformat(), "forming", len(forming), "quotes", len(quotes),
               "closed candles", len(candles), flush=True)
     finally:
         mt5.shutdown()
