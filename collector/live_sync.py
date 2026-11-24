@@ -24,6 +24,17 @@ FRAMES = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M
 def stamp(epoch):
     return datetime.fromtimestamp(int(epoch), timezone.utc).isoformat()
 
+# Explicit broker timestamp correction for quotes only.
+# Keep legacy candle keys unchanged until historical migration is validated.
+QUOTE_OFFSET_MINUTES = int(os.getenv("TRADING_AI_QUOTE_OFFSET_MINUTES", "0"))
+
+def quote_stamp(epoch, now=None):
+    now = time.time() if now is None else now
+    corrected = int(epoch) - QUOTE_OFFSET_MINUTES * 60
+    if corrected > now + 10:
+        raise ValueError("Quote timestamp is in the future; verify TRADING_AI_QUOTE_OFFSET_MINUTES")
+    return stamp(corrected)
+
 def upsert(table, rows, conflict):
     if not rows:
         return
@@ -68,9 +79,9 @@ def poll():
             if not info.visible and not mt5.symbol_select(broker_symbol, True):
                 continue
             tick = mt5.symbol_info_tick(broker_symbol)
-            if tick is not None and tick.bid > 0 and tick.ask > 0 and tick.time > 0:
+            if tick is not None and tick.bid > 0 and tick.ask >= tick.bid and tick.time > 0 and tick.time - QUOTE_OFFSET_MINUTES * 60 <= time.time() + 10:
                 quotes.append({"symbol": name, "bid": float(tick.bid),
-                               "ask": float(tick.ask), "quote_time": stamp(tick.time),
+                               "ask": float(tick.ask), "quote_time": quote_stamp(tick.time),
                                "broker_symbol": broker_symbol,
                                "point_size": float(info.point),
                                "contract_size": float(info.trade_contract_size),
