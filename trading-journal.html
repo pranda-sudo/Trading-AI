@@ -1,0 +1,39 @@
+<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trading Journal | XAUUSD</title><style id="auth-style">html:not(.auth-allowed) body > :not(#auth-gate){display:none!important}#auth-gate{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:20px;background:#091222;color:#eaf1fc;font-family:system-ui,sans-serif}#auth-gate .auth-panel{width:min(100%,410px);padding:32px;background:#142239;border:1px solid #34455f;border-radius:20px;box-shadow:0 25px 75px #0008}#auth-gate .auth-mark{color:#74baff;font-size:18px;font-weight:700}#auth-gate h1{font-size:25px;margin:18px 0 8px;color:#fff}#auth-gate p{color:#b6c7de;line-height:1.5}#auth-gate label{display:block;margin:17px 0 7px;color:#c8d5e9}#auth-gate input{display:block;width:100%;padding:13px;border-radius:9px;border:1px solid #50617c;background:#0c1729;color:#fff;font-size:16px}#auth-gate button{width:100%;padding:13px;margin-top:22px;border:0;border-radius:9px;background:#347ce2;color:#fff;font-weight:700;cursor:pointer}#auth-gate button:disabled{opacity:.6}#auth-gate [hidden]{display:none!important}#auth-gate .auth-foot{font-size:12px;margin-top:25px}#auth-logout{position:fixed;right:14px;top:14px;z-index:1000;padding:9px 13px;background:#283b55;color:#fff;border:1px solid #61728c;border-radius:9px;cursor:pointer}</style><script type="module" src="./auth.js"></script><style>
+*{box-sizing:border-box}body{margin:0;background:#0b1220;color:#e6edf7;font:15px system-ui,sans-serif}main,header{max-width:1250px;margin:auto;padding:22px}header{display:flex;gap:20px;align-items:center;flex-wrap:wrap}a{color:#83baff}h1{font-size:24px}h2{font-size:17px}.card{background:#131e30;border:1px solid #26344a;border-radius:14px;padding:20px;margin-bottom:18px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}.stat{background:#1b2a40;padding:14px;border-radius:9px}.stat strong{display:block;font-size:24px;margin-top:8px}small,.note{color:#aebed3}label{display:inline-flex;align-items:center;gap:8px;margin:8px 18px 8px 0}select,button{background:#202f46;color:white;padding:9px;border:1px solid #3a4d68;border-radius:8px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:12px 9px;border-bottom:1px solid #34445d;white-space:nowrap}th{color:#aebed3;font-size:12px}.scroll{overflow:auto}.good{color:#47d7a5}.bad{color:#ff8291}.warn{color:#ffcb77}
+</style></head><body><header><h1>◈ Trading AI / Trading Journal</h1><a href="./index.html">← Dashboard</a><a href="./scalping-xauusd.html">XAUUSD scalping</a></header><main>
+<div class="card"><h2>XAUUSD · automatický výzkumný deník</h2><p class="note">Záznamy serverových kandidátů, nikoli provedené obchody. Vstup, SL a TP jsou neměnné modelové hodnoty. Vyhodnocení využívá uzavřené M1 svíčky, zmrazený vstupní spread a nezahrnuje komise ani skluz. Nejednoznačné, neúplné a expirované výsledky nejsou započteny do TP/SL statistiky.</p><p id="status" role="status">Čekám na přihlášení…</p><label>Timeframe <select id="tf"><option value="">Všechny</option><option>M1</option><option>M5</option><option>M15</option></select></label><label>Výsledek <select id="result"><option value="">Všechny</option><option>OPEN</option><option>TP</option><option>SL</option><option>AMBIGUOUS</option><option>EXPIRED</option><option>DATA_GAP</option></select></label><button id="refresh">Obnovit</button><p id="scope" class="note"></p><div class="stats" id="stats"></div></div>
+<div class="card"><h2>Signály podle timeframe</h2><div class="scroll"><table><thead><tr><th>Timeframe</th><th>Celkem</th><th>TP</th><th>SL</th><th>Otevřené</th><th>Ostatní</th><th>Úspěšnost TP/SL</th><th>Součet R</th></tr></thead><tbody id="frames"></tbody></table></div></div>
+<div class="card"><h2>Záznamy signálů</h2><div class="scroll"><table><thead><tr><th>Pozorováno (Praha)</th><th>Strategie</th><th>TF</th><th>Směr</th><th>Vstup</th><th>SL</th><th>TP</th><th>Spread</th><th>Výsledek</th><th>R</th><th>Minuta zásahu (Praha)</th></tr></thead><tbody id="rows"></tbody></table></div><p id="empty" class="note"></p></div></main>
+<script type="module">
+import {supabase as db} from './auth.js';
+const $=id=>document.getElementById(id);
+const num=v=>v===null||v===undefined||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('cs-CZ',{maximumFractionDigits:3});
+const date=v=>v?new Date(v).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'}):'—';
+let data=[],busy=false,valid=false,truncated=false;
+function summary(a){
+ const tp=a.filter(x=>x.result==='TP'),sl=a.filter(x=>x.result==='SL'),closed=tp.length+sl.length,open=a.filter(x=>x.result==='OPEN').length;
+ const realized=[...tp,...sl].filter(x=>x.result_r!=null&&Number.isFinite(Number(x.result_r)));
+ const complete=realized.length===closed;
+ const gain=realized.filter(x=>Number(x.result_r)>0).reduce((s,x)=>s+Number(x.result_r),0),loss=-realized.filter(x=>Number(x.result_r)<0).reduce((s,x)=>s+Number(x.result_r),0);
+ return {total:a.length,tp:tp.length,sl:sl.length,open,other:a.length-closed-open,win:closed?100*tp.length/closed:null,r:closed&&complete?gain-loss:null,pf:complete&&loss>0?gain/loss:null};
+}
+function row(parent,values){const tr=document.createElement('tr');for(const v of values){const td=document.createElement('td');td.textContent=String(v);if(v==='TP')td.className='good';if(v==='SL')td.className='bad';tr.append(td)}parent.append(tr)}
+function render(){
+ const a=data.filter(x=>(!$('tf').value||x.timeframe===$('tf').value)&&(!$('result').value||x.result===$('result').value)),m=summary(a);
+ $('scope').textContent=valid?(truncated?'Posledních 1000 záznamů (omezený vzorek). ':'Všechny dostupné záznamy. ')+'Statistiky odpovídají aktuálním filtrům.':'Data nejsou ověřena.';
+ $('stats').replaceChildren();$('frames').replaceChildren();$('rows').replaceChildren();
+ if(!valid){$('empty').textContent='Statistiky nejsou dostupné.';return}
+ for(const [label,value] of [['Signály',m.total],['TP',m.tp],['SL',m.sl],['Otevřené',m.open],['Ostatní',m.other],['Úspěšnost TP/SL',m.win===null?'—':num(m.win)+' %'],['Součet R',num(m.r)],['Profit Factor',num(m.pf)]]){
+ const d=document.createElement('div');d.className='stat';const l=document.createElement('small'),v=document.createElement('strong');l.textContent=label;v.textContent=String(value);d.append(l,v);$('stats').append(d);}
+ for(const tf of ['M1','M5','M15']){const k=summary(a.filter(x=>x.timeframe===tf));row($('frames'),[tf,k.total,k.tp,k.sl,k.open,k.other,k.win===null?'—':num(k.win)+' %',num(k.r)]);}
+ for(const x of a)row($('rows'),[date(x.observed_at),x.strategy,x.timeframe,x.side,num(x.entry),num(x.stop_loss),num(x.take_profit),num(x.spread),x.result,num(x.result_r),date(x.exit_bar_utc)]);
+ $('empty').textContent=a.length?'':'Zatím žádné záznamy pro zvolené filtry.';
+}
+async function load(){if(busy)return;busy=true;try{
+ const {data:auth,error:ae}=await db.auth.getUser();if(ae||!auth?.user)throw Error('Vyžadováno přihlášení');
+ const r=await db.from('gold_signal_journal').select('strategy,timeframe,side,candle_time,observed_at,entry,stop_loss,take_profit,spread,result,result_r,exit_bar_utc',{count:'exact'}).eq('symbol','XAUUSD').order('observed_at',{ascending:false}).order('timeframe').order('side').limit(1000);
+ if(r.error)throw r.error;data=r.data||[];valid=true;truncated=r.count===null||r.count>data.length;
+ $('status').textContent='Načteno '+date(new Date())+' · pouze výzkumné signály.';
+ }catch(e){data=[];valid=false;$('status').textContent='Deník nedostupný: '+e.message;}finally{busy=false;render()}}
+$('tf').addEventListener('change',render);$('result').addEventListener('change',render);$('refresh').addEventListener('click',load);window.addEventListener('trading-ai-auth-ready',load);setInterval(()=>{if(!document.hidden)load()},30000);load();
+</script></body></html>
