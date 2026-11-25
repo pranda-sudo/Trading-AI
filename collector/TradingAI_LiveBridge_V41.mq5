@@ -1,5 +1,5 @@
 #property strict
-#property version "4.10"
+#property version "4.11"
 #property description "Read-only unified diagnostic bridge; attach to existing XAUUSD M5 source chart"
 input bool ProductionFiles=false;
 input bool ReadOtherGoldM1=false;
@@ -79,19 +79,19 @@ void ReadChart(int f,long c,int &rows,int &good){
   string kind=kinds[k];int h=handles[k],nb=k==0?7:1;
   ResetLastError();int ready=h==INVALID_HANDLE?-1:BarsCalculated(h);
   for(int b=0;b<nb;b++){
-   double v[2];ResetLastError();int got=-1;
-   if(ready>=2)got=CopyBuffer(h,b,0,2,v);
-   int err=GetLastError();
    for(int sh=0;sh<=1;sh++){
     datetime t=sh==0?t0:t1;
+    double v[1];ResetLastError();int got=-1;
+    if(h!=INVALID_HANDLE&&t>0)got=CopyBuffer(h,b,sh,1,v);
+    int err=GetLastError();
     string status="OBSERVED_UNVERIFIED",val="";
     if(h==INVALID_HANDLE)status="HANDLE_MISSING";
-    else if(got!=2||t<=0)status="BUFFER_WAIT";
-    else if(!MathIsValidNumber(v[1-sh])||v[1-sh]==EMPTY_VALUE)status="EMPTY";
-    else if((k==0||k==1)&&v[1-sh]<=0)status="ZERO_OR_INVALID";
+    else if(got!=1||t<=0)status="BUFFER_WAIT";
+    else if(!MathIsValidNumber(v[0])||v[0]==EMPTY_VALUE)status="EMPTY";
+    else if((k==0||k==1)&&v[0]<=0)status="ZERO_OR_INVALID";
     else if(err!=0)status="BUFFER_ERROR";
     else if(iTime(_Symbol,_Period,0)!=t0)status="BAR_CHANGED";
-    else {val=DoubleToString(v[1-sh],8);good++;}
+    else {val=DoubleToString(v[0],8);good++;}
     FileWrite(f,_Symbol,_Symbol,EnumToString(_Period),c,Clean(names[k]),kind,b,sh,(long)t,(long)TimeGMT(),val,status,err);rows++;
     if(status!="OBSERVED_UNVERIFIED")Print("V4.1 rejected ",kind," b=",b," sh=",sh," status=",status," ready=",ready," got=",got," err=",err);
    }
@@ -164,7 +164,7 @@ int OnInit(){
  live="TradingAI_CD_Live_V41_test.csv";
  objects="TradingAI_CD_Objects_V41_test.csv";
  if(!EventSetTimer(1))return INIT_FAILED;
- Print("V4.1 started; TEST ONLY objects=",EnableObjects);return INIT_SUCCEEDED;
+ Print("V4.1.1 started; TEST ONLY objects=",EnableObjects);return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason){EventKillTimer();if(of!=INVALID_HANDLE)AbortScan("deinit");ReleaseHandles();}
 void OnTick(){}
